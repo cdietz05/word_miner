@@ -48,6 +48,10 @@ Press and hold the gear on the map for a second and a half. It has:
 
 ## Putting it on the iPad
 
+It's hosted on GitHub Pages at **https://cdietz05.github.io/word_miner/**
+(`.nojekyll` makes Pages serve the files as they are). Every change merged
+into `main` is live a minute or so later.
+
 Open the site in Safari, tap Share, then **Add to Home Screen**. It opens full
 screen and works offline; his progress is saved on the iPad.
 
