@@ -64,17 +64,19 @@ function words(list)
   return list.map(([spec, picture]) => parseWord(spec, picture));
 }
 
-// The worlds, in the order they unlock - the usual phonics order: one short
-// vowel at a time, then all of them mixed with the double-letter endings,
-// then sh / ch / th / ng, then magic e. Each world's picture is what the
-// player picks to show they read the word, so every word needs one that
-// can't be mistaken for another in the same world.
+// The regions, in the order they open - the usual phonics order: one short
+// vowel at a time, then the double-letter endings, then sh / ch / th / ng,
+// then magic e. Each word's picture is what he picks to show he read it, so
+// every word needs one that can't be mistaken for another in the same
+// region. critterTypes are the kinds of wild critter most at home there
+// (see critters.openPack).
 export const WORLDS = [
   {
     id: 'meadow',
-    name: 'Grassy Meadow',
+    name: 'Sunny Meadow',
     focus: 'short a',
-    biome: 'grass',
+    scene: 'meadow',
+    critterTypes: ['grass', 'sky'],
     words: words([
       ['c.a.t', '🐱'], ['h.a.t', '🎩'], ['b.a.t', '🦇'], ['r.a.t', '🐀'], ['m.a.p', '🗺️'],
       ['c.a.p', '🧢'], ['c.a.n', '🥫'], ['m.a.n', '👨'], ['v.a.n', '🚐'], ['p.a.n', '🍳'],
@@ -84,9 +86,10 @@ export const WORLDS = [
   },
   {
     id: 'forest',
-    name: 'Birch Forest',
+    name: 'Whispering Woods',
     focus: 'short i',
-    biome: 'forest',
+    scene: 'forest',
+    critterTypes: ['grass', 'shadow'],
     words: words([
       ['p.i.g', '🐷'], ['d.i.g', '⛏️'], ['z.i.p', '🤐'], ['l.i.p', '👄'], ['f.i.n', '🦈'],
       ['p.i.n', '📌'], ['s.i.x', '6️⃣'], ['k.i.d', '🧒'], ['s.i.t', '🪑'], ['w.i.n', '🏆'],
@@ -97,7 +100,8 @@ export const WORLDS = [
     id: 'desert',
     name: 'Sandy Desert',
     focus: 'short o',
-    biome: 'sand',
+    scene: 'desert',
+    critterTypes: ['stone', 'fire'],
     words: words([
       ['d.o.g', '🐶'], ['l.o.g', '🪵'], ['f.o.g', '🌫️'], ['h.o.t', '🥵'], ['p.o.t', '🍲'],
       ['h.o.p', '🐇'], ['f.o.x', '🦊'], ['b.o.x', '📦'], ['r.o.d', '🎣'], ['c.o.p', '👮'],
@@ -108,7 +112,8 @@ export const WORLDS = [
     id: 'snow',
     name: 'Snowy Peaks',
     focus: 'short u',
-    biome: 'snow',
+    scene: 'snow',
+    critterTypes: ['frost', 'sky'],
     words: words([
       ['s.u.n', '☀️'], ['r.u.n', '🏃'], ['c.u.p', '☕'], ['b.u.g', '🐛'], ['h.u.g', '🤗'],
       ['b.u.s', '🚌'], ['n.u.t', '🥜'], ['h.u.t', '🛖'], ['c.u.b', '🐻'], ['t.u.b', '🛁'],
@@ -117,9 +122,10 @@ export const WORLDS = [
   },
   {
     id: 'caves',
-    name: 'Deep Caves',
+    name: 'Crystal Caves',
     focus: 'short e',
-    biome: 'stone',
+    scene: 'caves',
+    critterTypes: ['stone', 'shadow'],
     words: words([
       ['b.e.d', '🛏️'], ['r.e.d', '🟥'], ['n.e.t', '🥅'], ['h.e.n', '🐔'], ['p.e.n', '🖊️'],
       ['t.e.n', '🔟'], ['l.e.g', '🦵'], ['w.e.b', '🕸️'], ['j.e.t', '✈️'], ['w.e.t', '💦'],
@@ -128,9 +134,10 @@ export const WORLDS = [
   },
   {
     id: 'jungle',
-    name: 'Jungle Ruins',
+    name: 'Jungle River',
     focus: 'ck, ll, ss endings',
-    biome: 'jungle',
+    scene: 'jungle',
+    critterTypes: ['water', 'grass'],
     words: words([
       ['d.u.ck', '🦆'], ['s.o.ck', '🧦'], ['r.o.ck', '🪨'], ['l.o.ck', '🔒'], ['b.e.ll', '🔔'],
       ['d.o.ll', '🪆'], ['h.i.ll', '⛰️'], ['k.i.ss', '💋'], ['p.a.ck', '🎒'], ['l.i.ck', '👅'],
@@ -139,9 +146,10 @@ export const WORLDS = [
   },
   {
     id: 'lava',
-    name: 'Lava Lands',
+    name: 'Volcano Valley',
     focus: 'sh, ch, th, ng',
-    biome: 'lava',
+    scene: 'volcano',
+    critterTypes: ['fire', 'spark'],
     words: words([
       ['sh.i.p', '🚢'], ['sh.o.p', '🛍️'], ['f.i.sh', '🐟'], ['d.i.sh', '🍽️'], ['sh.e.ll', '🐚'],
       ['ch.o.p', '🪓'], ['ch.i.ck', '🐤'], ['l.u.n.ch', '🍱'], ['b.a.th', '🛁'], ['m.a.th', '➗'],
@@ -153,7 +161,8 @@ export const WORLDS = [
     id: 'sky',
     name: 'Sky Islands',
     focus: 'magic e',
-    biome: 'sky',
+    scene: 'sky',
+    critterTypes: ['sky', 'spark'],
     words: words([
       ['c.a+.k.e~', '🎂'], ['l.a+.k.e~', '🏞️'], ['b.i+.k.e~', '🚲'], ['k.i+.t.e~', '🪁'], ['f.i+.v.e~', '5️⃣'],
       ['n.i+.n.e~', '9️⃣'], ['b.o+.n.e~', '🦴'], ['r.o+.p.e~', '🪢'], ['h.o+.m.e~', '🏠'], ['n.o+.s=z.e~', '👃'],

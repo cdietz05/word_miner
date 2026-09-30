@@ -7,7 +7,7 @@
 // Bump VERSION when anything changes, so iPads drop the old copy.
 // tools/check_assets.py checks ASSETS against the files on disk.
 
-const VERSION = 'word-miner-v2';
+const VERSION = 'word-catcher-v4';
 
 const ASSETS = [
   './',
@@ -18,31 +18,20 @@ const ASSETS = [
   'js/phonics.js',
   'js/progress.js',
   'js/critters.js',
+  'js/creature_art.js',
+  'js/orb.js',
   'js/cards.js',
   'js/audio.js',
   'js/trim.js',
   'js/gate.js',
+  'js/settings.js',
   'js/recorder.js',
   'fonts/andika-regular.woff2',
   'fonts/andika-bold.woff2',
-  'fonts/press-start-2p.woff2',
+  'fonts/fredoka.woff2',
   'icons/apple-touch-icon.png',
   'icons/icon-192.png',
   'icons/icon-512.png',
-  'art/grass.png',
-  'art/forest.png',
-  'art/sand.png',
-  'art/snow.png',
-  'art/stone.png',
-  'art/jungle.png',
-  'art/lava.png',
-  'art/sky.png',
-  'art/dirt.png',
-  'art/tile.png',
-  'art/tile_lit.png',
-  'art/crack1.png',
-  'art/crack2.png',
-  'art/crack3.png',
   'sounds/a.m4a', 'sounds/e.m4a', 'sounds/i.m4a', 'sounds/o.m4a', 'sounds/u.m4a',
   'sounds/a_e.m4a', 'sounds/e_e.m4a', 'sounds/i_e.m4a', 'sounds/o_e.m4a', 'sounds/u_e.m4a',
   'sounds/c.m4a', 'sounds/d.m4a', 'sounds/f.m4a', 'sounds/g.m4a', 'sounds/h.m4a', 'sounds/j.m4a',

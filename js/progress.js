@@ -4,47 +4,57 @@
 // the rules without a browser.
 
 import { WORLDS, WORLD_GOAL, playableWords } from './phonics.js';
+import { CRITTERS, critterById } from './critters.js';
 
-// Gems for a word read right the first time, and after a second go. Always
-// something for getting there - the point is to keep him trying.
-export const GEMS_FIRST_TRY = 3;
-export const GEMS_LATER = 1;
-// A card pack for every this many words read right.
-export const WORDS_PER_PACK = 5;
-// Right in a row for a streak bonus.
-export const STREAK_BONUS_EVERY = 3;
-export const STREAK_BONUS_GEMS = 2;
+// A Catch Orb for every word read right; this many and a wild critter
+// appears. Always something for getting there - the point is to keep him
+// trying.
+export const ORBS_PER_ENCOUNTER = 5;
+// Right the first time, this many in a row, and the next critter he catches
+// comes on a holo card.
+export const HOLO_STREAK = 3;
+// How many words his buddy has to see read right, at each stage, before it
+// grows into the next form.
+export const EVOLVE_XP = { 1: 15, 2: 25 };
 
-const VERSION = 1;
+const VERSION = 2;
 
 export function initialState()
 {
   return {
     version: VERSION,
-    gems: 0,
     // word -> { right: n, wrong: n, lastSeen: turn }
     words: {},
     streak: 0,
     bestStreak: 0,
-    // Words read right since the last pack.
-    towardPack: 0,
-    // Packs earned but not opened yet, and the special ones a finished
-    // world gives, which are always rare or better.
-    packs: 0,
-    rarePacks: 0,
-    // Worlds whose goal was met, so their reward pack is given once.
+    // Orbs toward the next wild critter.
+    orbs: 0,
+    // Wild critters waiting to be caught, and the special ones a region's
+    // badge brings, likelier to be legendary.
+    encounters: 0,
+    specialEncounters: 0,
+    // Whether the next catch comes on a holo card.
+    holoCharged: false,
+    // Regions whose goal was met, so their badge is given once.
     completedWorlds: [],
-    // critter id -> how many
-    cards: {},
+    // critter id -> how many caught (or grown), and how many of those holo
+    caught: {},
+    holo: {},
+    // The critter he reads with, which grows as he does, and how much each
+    // critter has grown at its stage.
+    buddy: null,
+    xp: {},
     turn: 0,
   };
 }
 
 // A word read (or not). [firstTry] is whether it was right without a
 // wrong pick first; a wrong pick is recorded on its own, with correct false.
+// On a right answer he gets an orb, his buddy grows - into its next form,
+// once it has grown enough - and a run of first tries charges a holo card.
 export function recordAnswer(state, word, { correct, firstTry })
 {
-  const next = structuredCloneish(state);
+  const next = copy(state);
   next.turn += 1;
   const stats = next.words[word] ?? { right: 0, wrong: 0, lastSeen: 0 };
   stats.lastSeen = next.turn;
@@ -54,39 +64,146 @@ export function recordAnswer(state, word, { correct, firstTry })
     stats.wrong += 1;
     next.streak = 0;
     next.words[word] = stats;
-    return { state: next, gems: 0, packEarned: false, streakBonus: false };
+    return { state: next, encounterReady: false, holoCharged: false, evolution: null };
   }
 
   stats.right += 1;
   next.words[word] = stats;
 
-  let gems = firstTry ? GEMS_FIRST_TRY : GEMS_LATER;
-  let streakBonus = false;
+  let holoCharged = false;
   if (firstTry)
   {
     next.streak += 1;
     next.bestStreak = Math.max(next.bestStreak, next.streak);
-    if (next.streak % STREAK_BONUS_EVERY === 0)
+    if (next.streak % HOLO_STREAK === 0 && !next.holoCharged)
     {
-      gems += STREAK_BONUS_GEMS;
-      streakBonus = true;
+      next.holoCharged = true;
+      holoCharged = true;
     }
   }
   else
   {
     next.streak = 0;
   }
-  next.gems += gems;
 
-  next.towardPack += 1;
-  const packEarned = next.towardPack >= WORDS_PER_PACK;
-  if (packEarned)
+  next.orbs += 1;
+  const encounterReady = next.orbs >= ORBS_PER_ENCOUNTER;
+  if (encounterReady)
   {
-    next.towardPack = 0;
-    next.packs += 1;
+    next.orbs = 0;
+    next.encounters += 1;
   }
-  return { state: next, gems, packEarned, streakBonus };
+
+  const evolution = growBuddy(next);
+  return { state: next, encounterReady, holoCharged, evolution };
 }
+
+// One word's growth for his buddy, in place on a fresh copy. When it has
+// grown enough at its stage it becomes the next form in its line: that
+// form's card goes in his Critter Book and it's his buddy from then on.
+// Returns { from, to } when that happened, else null.
+function growBuddy(state)
+{
+  const buddy = state.buddy ? critterById(state.buddy) : null;
+  if (!buddy)
+  {
+    return null;
+  }
+  state.xp[buddy.id] = (state.xp[buddy.id] ?? 0) + 1;
+  const needed = EVOLVE_XP[buddy.stage];
+  if (!buddy.evolvesTo || needed === undefined || state.xp[buddy.id] < needed)
+  {
+    return null;
+  }
+  const grown = critterById(buddy.evolvesTo);
+  state.buddy = grown.id;
+  state.caught[grown.id] = (state.caught[grown.id] ?? 0) + 1;
+  state.xp[grown.id] = state.xp[grown.id] ?? 0;
+  return { from: buddy.id, to: grown.id };
+}
+
+// How far his buddy is toward its next form: null with no buddy; [needed]
+// null once it's in its final form.
+export function buddyGrowth(state)
+{
+  const buddy = state.buddy ? critterById(state.buddy) : null;
+  if (!buddy)
+  {
+    return null;
+  }
+  const needed = buddy.evolvesTo ? EVOLVE_XP[buddy.stage] : null;
+  return { critter: buddy, xp: state.xp[buddy.id] ?? 0, needed };
+}
+
+// Makes [critterId] his buddy - only one he's caught.
+export function chooseBuddy(state, critterId)
+{
+  if ((state.caught[critterId] ?? 0) === 0)
+  {
+    return state;
+  }
+  const next = copy(state);
+  next.buddy = critterId;
+  return next;
+}
+
+// A critter caught: into the Critter Book, on a holo card if one was
+// charged (which uses the charge up). His very first catch becomes his
+// buddy.
+export function catchCritter(state, critterId)
+{
+  const next = copy(state);
+  const isNew = (next.caught[critterId] ?? 0) === 0;
+  const holo = next.holoCharged;
+  const isNewHolo = holo && (next.holo[critterId] ?? 0) === 0;
+  next.caught[critterId] = (next.caught[critterId] ?? 0) + 1;
+  if (holo)
+  {
+    next.holo[critterId] = (next.holo[critterId] ?? 0) + 1;
+    next.holoCharged = false;
+  }
+  if (!next.buddy)
+  {
+    next.buddy = critterId;
+  }
+  return { state: next, holo, isNew, isNewHolo };
+}
+
+export function encountersWaiting(state)
+{
+  return state.encounters + state.specialEncounters;
+}
+
+// Takes one waiting encounter - a special one first. [kind] is 'special',
+// 'wild', or null when there are none.
+export function spendEncounter(state)
+{
+  if (state.specialEncounters > 0)
+  {
+    const next = copy(state);
+    next.specialEncounters -= 1;
+    return { state: next, kind: 'special' };
+  }
+  if (state.encounters > 0)
+  {
+    const next = copy(state);
+    next.encounters -= 1;
+    return { state: next, kind: 'wild' };
+  }
+  return { state, kind: null };
+}
+
+// How many different critters he's caught, and holo cards.
+export function bookCounts(state)
+{
+  return {
+    caught: CRITTERS.filter((critter) => (state.caught[critter.id] ?? 0) > 0).length,
+    holo: CRITTERS.filter((critter) => (state.holo[critter.id] ?? 0) > 0).length,
+    total: CRITTERS.length,
+  };
+}
+
+// --- regions ---------------------------------------------------------------
 
 // How many different words of [world] have been read right.
 export function wordsLearned(state, world, availableSounds)
@@ -121,50 +238,21 @@ export function unlockedWorldIds(state, availableSounds)
   return open;
 }
 
-// A world whose goal was just met hands out one special pack, always rare
-// or better - once. Returns the state with it given, and whether it was new.
+// A region whose goal was just met gives its badge and a special
+// encounter - once. Returns the state with it given, and whether it was new.
 export function claimWorldReward(state, world, availableSounds)
 {
   if (state.completedWorlds.includes(world.id) || !isWorldComplete(state, world, availableSounds))
   {
     return { state, claimed: false };
   }
-  const next = structuredCloneish(state);
+  const next = copy(state);
   next.completedWorlds.push(world.id);
-  next.rarePacks += 1;
+  next.specialEncounters += 1;
   return { state: next, claimed: true };
 }
 
-export function addCard(state, critterId)
-{
-  const next = structuredCloneish(state);
-  next.cards[critterId] = (next.cards[critterId] ?? 0) + 1;
-  return next;
-}
-
-export function packsWaiting(state)
-{
-  return state.packs + state.rarePacks;
-}
-
-// Takes one pack to open - a special one first. [minRarity] is what the
-// pack promises (see critters.openPack); null when there are none.
-export function spendPack(state)
-{
-  if (state.rarePacks > 0)
-  {
-    const next = structuredCloneish(state);
-    next.rarePacks -= 1;
-    return { state: next, minRarity: 'rare' };
-  }
-  if (state.packs > 0)
-  {
-    const next = structuredCloneish(state);
-    next.packs -= 1;
-    return { state: next, minRarity: 'common' };
-  }
-  return { state, minRarity: null };
-}
+// --- words -----------------------------------------------------------------
 
 // Which word comes next. Words he hasn't read yet come first, then the ones
 // he's got wrong more than right, then the rest - never the word just
@@ -199,7 +287,7 @@ export function nextWord(state, words, random, previous = null)
   return candidates[candidates.length - 1];
 }
 
-// Words he finds hard, for the Parent Corner: more wrong than right.
+// Words he finds hard, for the grown-ups' corner: more wrong than right.
 export function troubleWords(state)
 {
   return Object.entries(state.words)
@@ -208,34 +296,65 @@ export function troubleWords(state)
     .map(([word]) => word);
 }
 
-// A plain-data copy - the state is only ever numbers, strings, arrays and
-// plain objects.
-function structuredCloneish(state)
+// A plain-data copy - the state is only ever numbers, strings, booleans,
+// arrays and plain objects.
+function copy(state)
 {
   return JSON.parse(JSON.stringify(state));
 }
 
 // --- storage ---------------------------------------------------------------
 
+// The key from when the game was Word Miner, kept so his progress carries
+// over.
 const STORAGE_KEY = 'word_miner_progress';
 
-// Anything unreadable - a private window, cleared data, an old shape -
+// A save from Word Miner (version 1) into this game: his reading - the
+// words, streaks and finished regions - carries over whole. Its card-pack
+// rewards become encounters, and any card of a critter still in the game
+// stays in his book. Cards of critters that are gone, and the gems -
+// nothing to spend them on now - are left behind.
+export function migrate(saved)
+{
+  if (!saved || typeof saved !== 'object')
+  {
+    return initialState();
+  }
+  if (saved.version === VERSION)
+  {
+    return { ...initialState(), ...saved };
+  }
+  if (saved.version !== 1)
+  {
+    return initialState();
+  }
+  const next = initialState();
+  next.words = saved.words ?? {};
+  next.streak = saved.streak ?? 0;
+  next.bestStreak = saved.bestStreak ?? 0;
+  next.turn = saved.turn ?? 0;
+  next.completedWorlds = saved.completedWorlds ?? [];
+  next.orbs = Math.min(ORBS_PER_ENCOUNTER - 1, saved.towardPack ?? 0);
+  next.encounters = saved.packs ?? 0;
+  next.specialEncounters = saved.rarePacks ?? 0;
+  for (const [id, count] of Object.entries(saved.cards ?? {}))
+  {
+    if (critterById(id) && count > 0)
+    {
+      next.caught[id] = count;
+    }
+  }
+  return next;
+}
+
+// Anything unreadable - a private window, cleared data, an unknown shape -
 // starts fresh rather than breaking the game.
 export function load(storage)
 {
   try
   {
     const raw = storage.getItem(STORAGE_KEY);
-    if (!raw)
-    {
-      return initialState();
-    }
-    const saved = JSON.parse(raw);
-    if (saved.version !== VERSION)
-    {
-      return initialState();
-    }
-    return { ...initialState(), ...saved };
+    return raw ? migrate(JSON.parse(raw)) : initialState();
   }
   catch (error)
   {
