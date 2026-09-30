@@ -1,44 +1,63 @@
-# Word Miner
+# Word Catcher
 
 A phonics game for a six-year-old learning to read, built to live on an
-iPad's home screen. He sounds out a word block by block, blends it, picks the
-matching picture, and breaks the block open for gems. Every five words earns a
-pack of critter cards to collect.
+iPad's home screen. He sounds out a word letter by letter, blends it, and
+picks the matching picture. Every word read right earns a Catch Orb, and five
+orbs bring a wild critter to catch. His buddy critter grows with every word,
+evolving from a cute baby into a fierce final form.
 
 ## How a word is played
 
-1. The word appears as a row of stone blocks, one per sound (`c` `a` `t`,
+1. The word appears as a row of letter stones, one per sound (`c` `a` `t`,
    `sh` `i` `p`, `c` `a` `k` `e`).
-2. He taps each block, left to right, and hears its sound.
-3. He taps the pickaxe, and the sounds play once slowly, then run together.
-4. He picks the picture that matches from three. Right the first time is 3
-   gems; after a miss it's 1, and after two misses the right picture points
-   itself out.
+2. He taps each letter, left to right, and hears its sound.
+3. He taps Blend, and the sounds play once slowly, then run together.
+4. He picks the picture that matches from three. After two misses the right
+   picture points itself out. Every right answer earns an orb - the point is
+   to keep him trying.
 
 Every instruction is spoken aloud, since he's learning to read. The letters
 are set in Andika, a typeface designed for early readers.
 
-## The worlds
+## Critters
+
+- **His first critter.** He starts by picking one of three babies - Budlet
+  (grass), Emberkit (fire) or Splashy (water). It's his buddy.
+- **Evolving.** His buddy grows with every word he reads right. After 15 words
+  a baby evolves into its middle form, and after 25 more into its final form -
+  cute and round, then sleek, then big and fierce. Each new form's card goes
+  in his Critter Book. He can make any critter he's caught his buddy, and
+  each one keeps its own growth.
+- **Wild encounters.** Five orbs and a wild critter appears. He taps the orb
+  to throw it, it rocks three times, and it's caught - always. The wild only
+  holds babies (the kinds at home in the place he's reading are likelier),
+  plus a small chance of one of the two legendaries.
+- **Holo cards.** Three words in a row right the first time charges his next
+  catch: it comes on a holo card, which fills a separate holo slot in the
+  book.
+- **The Critter Book.** Eight lines of three - grass, fire, water, stone,
+  spark, frost, shadow, sky - and two legendaries: 26 critters, and a holo
+  card of each to find as well. Final forms have a foil picture window;
+  legendaries are foil all over with a gold edge; holo cards are foil all
+  over with a light sweeping across them. Held up big, a card tilts under his
+  finger and the foil shimmers with it.
+
+## The places
 
 They open one after another, in the usual phonics order. Each opens once 10
-different words in the one before it are read right.
+different words in the one before it are read right, which also earns that
+place's badge and a special encounter, likelier to be legendary.
 
-| World | Sounds |
+| Place | Sounds |
 |---|---|
-| Grassy Meadow | short a |
-| Birch Forest | short i |
+| Sunny Meadow | short a |
+| Whispering Woods | short i |
 | Sandy Desert | short o |
 | Snowy Peaks | short u |
-| Deep Caves | short e |
-| Jungle Ruins | ck, ll, ss endings |
-| Lava Lands | sh, ch, th, ng |
+| Crystal Caves | short e |
+| Jungle River | ck, ll, ss endings |
+| Volcano Valley | sh, ch, th, ng |
 | Sky Islands | magic e |
-
-Finishing a world gives a special pack that's always rare or better.
-
-Rare cards are holofoil - a rainbow foil picture window with sparkle - and
-legendary ones are foil all over with a gold edge. Held up big, a card
-tilts under his finger and the foil shimmers with it.
 
 ## Grown-ups' corner
 
@@ -62,7 +81,9 @@ It's hosted on GitHub Pages at **https://cdietz05.github.io/word_miner/**
 into `main` is live a minute or so later.
 
 Open the site in Safari, tap Share, then **Add to Home Screen**. It opens full
-screen and works offline; his progress is saved on the iPad.
+screen and works offline; his progress is saved on the iPad. The game was
+called Word Miner at first; progress saved then carries over - his words,
+streaks and finished places, and any critters still in the game.
 
 ## Working on it
 
@@ -75,19 +96,23 @@ python3 -m http.server 8000
 
 - `sh tools/test.sh` runs the tests (with the JavaScript engine built into
   macOS - nothing to install) and checks the offline file list.
-- `?preview=home`, `play`, `choose`, `collection`, `pack`, `gate`, `card`
-  (`&id=` a critter) or `parent` (`&section=voice`) opens
-  straight on a screen with made-up progress that is never saved, for checking
-  a layout on a device.
+- `?preview=home`, `starters`, `play`, `choose`, `book`, `encounter`
+  (`&throw=1` throws the orb), `evolve` (`&id=` the form it evolves into),
+  `gate`, `card` (`&id=` a critter, `&holo=1`) or `parent`
+  (`&section=voice`) opens straight on a screen with made-up progress that is
+  never saved, for checking a layout on a device.
+- `sh tools/make_icons.sh` redraws the icons from `tools/icon.js`.
 - `python3 tools/prepare_sounds.py` re-trims `sounds/source/` into `sounds/`.
-- `python3 tools/make_art.py` redraws the block textures and icons.
 - When anything changes, bump `VERSION` in `sw.js` so iPads pick it up.
 
 | Where | What |
 |---|---|
-| `js/phonics.js` | The words, the worlds, and how each word is sounded out |
-| `js/progress.js` | Gems, streaks, packs, unlocking worlds, choosing the next word |
-| `js/critters.js` | The 32 critter cards, pack odds, and their pixel art |
+| `js/phonics.js` | The words, the places, and how each word is sounded out |
+| `js/progress.js` | Orbs, holo charge, buddy growth and evolving, unlocking places, choosing the next word |
+| `js/critters.js` | The 26 critters, their evolution lines, and what turns up in the wild |
+| `js/creature_art.js` | Every critter's picture, drawn as SVG |
+| `js/cards.js` | Critter cards |
+| `js/orb.js` | The Catch Orb |
 | `js/audio.js` | Letter sounds, game noises and the spoken instructions |
 | `js/settings.js` | The grown-ups' voice and speed settings |
 | `js/recorder.js` | Parent recordings, kept on the iPad |
@@ -100,9 +125,9 @@ python3 -m http.server 8000
   trimmed and levelled for the game (`tools/prepare_sounds.py`). The originals
   are in `sounds/source/`.
 - Fonts: [Andika](https://software.sil.org/andika/) by SIL and
-  [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P) by
-  CodeMan38, both under the SIL Open Font License.
-- Everything else - the critters, the blocks and the word lists - was made for
+  [Fredoka](https://fonts.google.com/specimen/Fredoka) by Milena Brandão,
+  both under the SIL Open Font License.
+- Everything else - the critters, the orbs and the word lists - was made for
   this game.
 
 Because the letter sounds are licensed for non-commercial use only, the game

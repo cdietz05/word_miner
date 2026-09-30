@@ -10,7 +10,7 @@ import re
 import sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-GAME_FILES = ['index.html', 'styles.css', 'manifest.webmanifest', 'js/*.js', 'fonts/*.woff2', 'icons/*.png', 'art/*.png', 'sounds/*.m4a']
+GAME_FILES = ['index.html', 'styles.css', 'manifest.webmanifest', 'js/*.js', 'fonts/*.woff2', 'icons/*.png', 'sounds/*.m4a']
 
 
 def main():

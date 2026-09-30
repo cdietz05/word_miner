@@ -201,18 +201,18 @@ export class Sounds
     source.start(this.context.currentTime + delay);
   }
 
-  // A block cracking under the pickaxe.
-  crack()
+  // A letter stone tapped.
+  tap()
   {
-    this.noise(0.08, { volume: 0.12 });
-    this.tone(180, 0.06, { type: 'triangle', volume: 0.1 });
+    this.tone(660, 0.06, { type: 'triangle', volume: 0.1 });
+    this.tone(990, 0.05, { type: 'sine', volume: 0.06, delay: 0.03 });
   }
 
-  // A block breaking open.
-  shatter()
+  // The letter stones bursting when a word is read.
+  burst()
   {
-    this.noise(0.25, { volume: 0.2 });
-    this.tone(140, 0.2, { type: 'triangle', volume: 0.12, slideTo: 60 });
+    this.noise(0.18, { volume: 0.12 });
+    [784, 1047, 1319].forEach((frequency, i) => this.tone(frequency, 0.12, { type: 'sine', volume: 0.08, delay: i * 0.04 }));
   }
 
   // Right answer: a bright little rising tune.
@@ -227,23 +227,54 @@ export class Sounds
     this.tone(220, 0.18, { type: 'triangle', volume: 0.1, slideTo: 180 });
   }
 
-  // Gems landing.
-  gem()
+  // An orb landing in the meter, or a silent letter.
+  chime()
   {
     this.tone(1318, 0.08, { volume: 0.08 });
     this.tone(1760, 0.1, { volume: 0.08, delay: 0.06 });
   }
 
-  // A card pack opening.
+  // A card appearing.
   sparkle()
   {
     [880, 1175, 1397, 1760, 2093].forEach((frequency, i) => this.tone(frequency, 0.12, { type: 'sine', volume: 0.1, delay: i * 0.06 }));
   }
 
-  // A world finished.
+  // A region finished, or a critter caught.
   fanfare()
   {
     [523, 523, 659, 784, 659, 784, 1047].forEach((frequency, i) => this.tone(frequency, 0.18, { delay: i * 0.13 }));
+  }
+
+  // An orb thrown: a rising whoosh.
+  whoosh()
+  {
+    this.tone(300, 0.45, { type: 'sine', volume: 0.12, slideTo: 1400 });
+    this.noise(0.3, { volume: 0.06 });
+  }
+
+  // The orb rocking on the ground with a critter inside.
+  wobble()
+  {
+    this.tone(220, 0.12, { type: 'triangle', volume: 0.14, slideTo: 160 });
+    this.tone(330, 0.08, { type: 'square', volume: 0.04, delay: 0.1 });
+  }
+
+  // The orb clicking shut for good.
+  click()
+  {
+    this.tone(1760, 0.05, { volume: 0.1 });
+    this.tone(2637, 0.12, { type: 'sine', volume: 0.1, delay: 0.05 });
+  }
+
+  // A critter evolving: a rising shimmer, [seconds] long.
+  shimmer(seconds)
+  {
+    const steps = Math.round(seconds * 8);
+    for (let i = 0; i < steps; i++)
+    {
+      this.tone(400 + i * (1200 / steps), 0.1, { type: 'sine', volume: 0.07, delay: i / 8 });
+    }
   }
 }
 

@@ -1,18 +1,19 @@
 // The game: every screen, and what happens when it's tapped.
 //
 // Screens are drawn with innerHTML and one click handler per screen that
-// reads data-action off whatever was tapped. The rules - what a word is
-// worth, when a world opens, which card a pack gives - live in progress.js,
-// phonics.js and critters.js; this file only calls them and shows the
-// result.
+// reads data-action off whatever was tapped. The rules - what a word earns,
+// when a region opens, which critter turns up, when a buddy grows - live in
+// progress.js, phonics.js and critters.js; this file only calls them and
+// shows the result.
 
 import { SOUND_KEYS, RECORD_ONLY, SOUND_HINTS, WORLDS, playableWords, pickChoices } from './phonics.js';
 import * as progress from './progress.js';
-import { CRITTERS, critterById, openPack } from './critters.js';
+import { CRITTERS, STARTERS, TYPES, critterById, wildEncounter } from './critters.js';
 import { Sounds, say, wait, configureVoice, deviceVoices } from './audio.js';
 import { SPEEDS, englishVoices, chooseVoice, speechRate, loadSettings, saveSettings } from './settings.js';
 import { loadRecordings, saveRecording, deleteRecording, startRecording } from './recorder.js';
-import { cardHtml, drawSprites } from './cards.js';
+import { cardHtml, critterPicture } from './cards.js';
+import { orbSvg } from './orb.js';
 import { grownUpQuestion } from './gate.js';
 
 const app = document.getElementById('app');
@@ -31,16 +32,17 @@ let idleTimer = null;
 const TALKATIVE_ROUNDS = 3;
 const IDLE_HINT_MS = 9000;
 
-// Each world's sky, and the big letters on its tile on the map.
-const SKIES = {
-  grass: ['#3a78c2', '#9fd0ff'],
-  forest: ['#4f7fb0', '#c6e2b0'],
-  sand: ['#d9823a', '#ffe2a0'],
-  snow: ['#7aa7d6', '#eef6ff'],
-  stone: ['#1d1f27', '#4a4f5e'],
-  jungle: ['#2f6f5a', '#9fe0a0'],
-  lava: ['#3a0d0d', '#b3471c'],
-  sky: ['#6ab0ff', '#fff3c9'],
+// Each region's sky, top to bottom, and the letters on its tile on the map.
+const SCENES = {
+  meadow: ['#5fb8ff', '#c9f29b'],
+  forest: ['#2f6b4f', '#9fd08a'],
+  desert: ['#f0a04b', '#ffe3a3'],
+  snow: ['#8fbfe8', '#f2f9ff'],
+  caves: ['#2a2150', '#6a58b0'],
+  jungle: ['#1f7a6a', '#9fe0b0'],
+  volcano: ['#3a0d18', '#d4562a'],
+  sky: ['#6ab0ff', '#fff0c9'],
+  night: ['#1b2340', '#3a3f7a'],
 };
 const MAP_LETTERS = {
   meadow: 'a',
@@ -72,11 +74,17 @@ function commit(next)
   }
 }
 
-function setSky(biome)
+function setScene(scene)
 {
-  const [top, bottom] = SKIES[biome] ?? SKIES.grass;
+  const [top, bottom] = SCENES[scene] ?? SCENES.meadow;
   document.documentElement.style.setProperty('--sky-top', top);
   document.documentElement.style.setProperty('--sky-bottom', bottom);
+}
+
+function sceneBackground(scene)
+{
+  const [top, bottom] = SCENES[scene] ?? SCENES.meadow;
+  return `linear-gradient(${top}, ${bottom})`;
 }
 
 function clearIdle()
@@ -88,19 +96,26 @@ function clearIdle()
   }
 }
 
+function closeOverlay()
+{
+  overlay.onclick = null;
+  overlay.hidden = true;
+  overlay.innerHTML = '';
+}
+
 // --- start ---------------------------------------------------------------------
 
 // Sound on the iPad can only start from a tap, so the game opens on one big
 // button; tapping it unlocks the sound and loads the letter sounds.
 function renderStart()
 {
-  setSky('grass');
+  setScene('meadow');
   app.innerHTML = `
     <div class="start">
       <div>
-        <h1 class="title">WORD<br>MINER</h1>
-        <img class="hero" src="icons/icon-512.png" alt="">
-        <div><button class="block-button green play-button" data-action="begin">▶ PLAY</button></div>
+        <h1 class="title">WORD<br>CATCHER</h1>
+        <div class="hero">${STARTERS.map((id) => critterPicture(critterById(id))).join('')}</div>
+        <div><button class="pill go play-button" data-action="begin">▶ PLAY</button></div>
       </div>
     </div>`;
   app.onclick = async (event) =>
@@ -111,7 +126,7 @@ function renderStart()
     }
     app.onclick = null;
     sounds.unlock();
-    event.target.closest('button').textContent = '⛏️ ...';
+    event.target.closest('button').textContent = '...';
     await sounds.load(SOUND_KEYS.filter((key) => !RECORD_ONLY.includes(key)));
     for (const [key, blob] of await loadRecordings())
     {
@@ -124,35 +139,98 @@ function renderStart()
         // A recording that won't decode any more is skipped.
       }
     }
-    renderHome();
-    say('Welcome, miner! Pick a world to dig in.');
+    if (state.buddy)
+    {
+      renderHome();
+      say('Welcome back, catcher! Where shall we explore?');
+    }
+    else
+    {
+      renderStarters();
+    }
   };
 }
 
-// --- home: the world map -----------------------------------------------------
+// --- his first critter ---------------------------------------------------------
+
+// Three babies to pick from, the way every critter adventure starts. The
+// one he picks is his first catch and his buddy.
+function renderStarters()
+{
+  clearIdle();
+  setScene('meadow');
+  let chosen = null;
+  app.innerHTML = `
+    <div class="starters">
+      <div class="overlay-text">Pick your first critter!</div>
+      <div class="starter-row">
+        ${STARTERS.map((id) => `<button class="starter" data-action="starter" data-id="${id}" aria-label="${critterById(id).name}">${critterPicture(critterById(id))}</button>`).join('')}
+      </div>
+      <div class="starter-name" id="starter-name"></div>
+      <div id="starter-go"></div>
+    </div>`;
+  say('Pick your first critter! Tap one to meet it.');
+  app.onclick = async (event) =>
+  {
+    const target = event.target.closest('[data-action]');
+    if (!target)
+    {
+      return;
+    }
+    sounds.unlock();
+    if (target.dataset.action === 'starter')
+    {
+      chosen = critterById(target.dataset.id);
+      app.querySelectorAll('.starter').forEach((button) => button.classList.toggle('chosen', button === target));
+      document.getElementById('starter-name').textContent = `${chosen.name} ${TYPES[chosen.type].icon}`;
+      document.getElementById('starter-go').innerHTML = `<button class="pill go" data-action="pick">✓ Pick ${chosen.name}</button>`;
+      sounds.tap();
+      say(`${chosen.name}, the ${TYPES[chosen.type].label.toLowerCase()} critter!`);
+    }
+    else if (target.dataset.action === 'pick' && chosen)
+    {
+      app.onclick = null;
+      const caught = progress.catchCritter(state, chosen.id);
+      commit(progress.chooseBuddy(caught.state, chosen.id));
+      sounds.fanfare();
+      confetti();
+      await showCardReveal(chosen, {
+        isNew: caught.isNew,
+        holo: caught.holo,
+        line: `${chosen.name} is your buddy!`,
+        speech: `${chosen.name} is your buddy! Read words together and ${chosen.name} will grow.`,
+      });
+      renderHome();
+      say('Pick a place to explore!');
+    }
+  };
+}
+
+// --- home: the region map -------------------------------------------------------
 
 function renderHome()
 {
   clearIdle();
   app.onchange = null;
   session = null;
-  setSky('grass');
+  setScene('meadow');
   const available = sounds.available();
   const open = progress.unlockedWorldIds(state, available);
-  const waiting = progress.packsWaiting(state);
-  const owned = CRITTERS.filter((critter) => (state.cards[critter.id] ?? 0) > 0).length;
+  const waiting = progress.encountersWaiting(state);
+  const book = progress.bookCounts(state);
 
   app.innerHTML = `
     <div class="topbar">
-      <span class="screen-title">WORD MINER</span>
+      <span class="screen-title">WORD CATCHER</span>
       <span class="spacer"></span>
-      <div class="counter"><span class="icon">💎</span>${state.gems}</div>
+      ${state.holoCharged ? '<span class="holo-charge">✨ HOLO READY</span>' : ''}
       <button class="icon-button" data-action="grown-ups" aria-label="Grown-ups">⚙️</button>
     </div>
     <div class="home-body">
+      ${buddyPanel()}
       <div class="home-actions">
-        ${waiting > 0 ? `<button class="block-button gold pack-ready" data-action="open-pack">🎁 Open pack${waiting > 1 ? ` (${waiting})` : ''}</button>` : ''}
-        <button class="block-button" data-action="collection">🃏 My cards ${owned} / ${CRITTERS.length}</button>
+        ${waiting > 0 ? `<button class="pill wild wild-ready" data-action="encounter">❗ Wild critter!${waiting > 1 ? ` (${waiting})` : ''}</button>` : ''}
+        <button class="pill" data-action="book">📖 Critter Book ${book.caught} / ${book.total}</button>
       </div>
       <div class="worlds">
         ${WORLDS.map((world) => worldTile(world, open.includes(world.id), available)).join('')}
@@ -173,25 +251,77 @@ function renderHome()
       if (target.classList.contains('locked'))
       {
         sounds.wrong();
-        say('Finish the world before this one to open it!');
+        say('Finish the place before this one to open it!');
         return;
       }
       startWorld(target.dataset.world);
     }
-    else if (action === 'collection')
+    else if (action === 'book')
     {
-      renderCollection();
+      renderBook();
     }
-    else if (action === 'open-pack')
+    else if (action === 'encounter')
     {
-      await showPacks();
+      await showEncounters([]);
       renderHome();
+    }
+    else if (action === 'buddy')
+    {
+      const growth = progress.buddyGrowth(state);
+      if (growth)
+      {
+        sounds.tap();
+        say(growth.needed === null
+          ? `${growth.critter.name} is all grown up!`
+          : `Read words to help ${growth.critter.name} grow!`);
+      }
     }
     else if (action === 'grown-ups')
     {
       showGrownUpGate();
     }
+    else if (action === 'starters')
+    {
+      renderStarters();
+    }
   };
+}
+
+// His buddy, how far it's grown, and a glimpse of what it grows into - a
+// shadow, until he's seen it.
+function buddyPanel()
+{
+  const growth = progress.buddyGrowth(state);
+  if (!growth)
+  {
+    return `
+      <div class="buddy-panel">
+        <div class="buddy-info">
+          <div class="buddy-name">No buddy yet!</div>
+          <button class="pill go" data-action="starters">Pick your first critter</button>
+        </div>
+      </div>`;
+  }
+  const { critter, xp, needed } = growth;
+  let note = 'All grown up! 💪';
+  let percent = 100;
+  if (needed !== null)
+  {
+    const next = critterById(critter.evolvesTo);
+    const seen = (state.caught[next.id] ?? 0) > 0;
+    percent = Math.min(100, Math.round((xp / needed) * 100));
+    const left = needed - xp;
+    note = `${critterPicture(next, { silhouette: !seen })} Grows in ${left} word${left === 1 ? '' : 's'}!`;
+  }
+  return `
+    <div class="buddy-panel">
+      <button class="buddy-art" data-action="buddy" aria-label="${critter.name}">${critterPicture(critter)}</button>
+      <div class="buddy-info">
+        <div class="buddy-name">${critter.name} <small>${TYPES[critter.type].icon} your buddy</small></div>
+        <div class="grow-bar"><span style="width: ${percent}%"></span></div>
+        <div class="grow-note">${note}</div>
+      </div>
+    </div>`;
 }
 
 function worldTile(world, isOpen, available)
@@ -200,10 +330,12 @@ function worldTile(world, isOpen, available)
   const goal = progress.worldGoal(world, available);
   const complete = learned >= goal;
   const percent = goal > 0 ? Math.round((learned / goal) * 100) : 0;
+  const local = CRITTERS.find((critter) => critter.type === world.critterTypes[0] && critter.stage === 1);
   return `
     <button class="world ${isOpen ? '' : 'locked'}" data-action="world" data-world="${world.id}"
-      style="background-image: url('art/${world.biome}.png')" aria-label="${world.name}">
-      ${complete ? '<span class="done">⭐</span>' : ''}
+      style="background: ${sceneBackground(world.scene)}" aria-label="${world.name}">
+      <span class="peek">${critterPicture(local)}</span>
+      ${complete ? '<span class="done">🏅</span>' : ''}
       <span class="focus">${MAP_LETTERS[world.id]}</span>
       <span class="name">${world.name}</span>
       ${isOpen ? `<span class="bar"><span style="width: ${percent}%"></span></span>` : ''}
@@ -229,7 +361,7 @@ function showGrownUpGate()
           <button class="key" data-key="0">0</button>
           <button class="key go" data-key="go" aria-label="Enter">✓</button>
         </div>
-        <button class="block-button" data-key="cancel">Back to the game</button>
+        <button class="pill" data-key="cancel">Back to the game</button>
       </div>`;
   };
   draw();
@@ -242,9 +374,7 @@ function showGrownUpGate()
     }
     if (key === 'cancel')
     {
-      overlay.onclick = null;
-      overlay.hidden = true;
-      overlay.innerHTML = '';
+      closeOverlay();
       return;
     }
     if (key === 'back')
@@ -257,9 +387,7 @@ function showGrownUpGate()
     {
       if (Number(typed) === question.answer)
       {
-        overlay.onclick = null;
-        overlay.hidden = true;
-        overlay.innerHTML = '';
+        closeOverlay();
         renderParent();
         return;
       }
@@ -282,11 +410,11 @@ function startWorld(worldId)
 {
   const world = WORLDS.find((candidate) => candidate.id === worldId);
   session = { world, previous: null, rounds: 0 };
-  setSky(world.biome);
+  setScene(world.scene);
   nextRound();
   if (world.id === 'sky')
   {
-    say('In this world, the e at the end is magic. It is quiet, and it makes the other vowel say its name!');
+    say('In this place, the e at the end is magic. It is quiet, and it makes the other vowel say its name!');
   }
 }
 
@@ -317,12 +445,12 @@ function nextRound()
   renderPlay();
   if (session.rounds < TALKATIVE_ROUNDS)
   {
-    say('Tap each block to hear its sound.');
+    say('Tap each letter to hear its sound.');
   }
   armIdleHint();
 }
 
-// Nothing tapped for a while: point at the next block and say so, once.
+// Nothing tapped for a while: point at the next letter and say so, once.
 function armIdleHint()
 {
   clearIdle();
@@ -335,17 +463,24 @@ function armIdleHint()
     session.idleHinted = true;
     if (session.phase === 'tap')
     {
-      say('Tap the glowing block!');
+      say('Tap the glowing letter!');
     }
     else if (session.phase === 'blend')
     {
-      say('Tap the pickaxe to blend the sounds!');
+      say('Tap Blend to put the sounds together!');
     }
     else if (session.phase === 'choose')
     {
       say('Which picture is it? Tap the speaker to hear the sounds again.');
     }
   }, IDLE_HINT_MS);
+}
+
+function orbMeter()
+{
+  return Array.from({ length: progress.ORBS_PER_ENCOUNTER }, (_, i) => (i < state.orbs
+    ? `<span class="slot full">${orbSvg()}</span>`
+    : '<span class="slot"></span>')).join('');
 }
 
 function renderPlay()
@@ -355,16 +490,15 @@ function renderPlay()
   const learned = progress.wordsLearned(state, world, available);
   const goal = progress.worldGoal(world, available);
   const percent = goal > 0 ? Math.min(100, Math.round((learned / goal) * 100)) : 0;
+  const buddy = state.buddy ? critterById(state.buddy) : null;
 
   app.innerHTML = `
     <div class="topbar">
       <button class="icon-button" data-action="home" aria-label="Map">🏠</button>
-      <div class="world-progress" aria-label="World progress"><span style="width: ${percent}%"></span></div>
+      <div class="world-progress" aria-label="Progress in this place"><span style="width: ${percent}%"></span></div>
       <span class="spacer"></span>
-      <div class="pack-meter" aria-label="Words until the next card pack">
-        ${Array.from({ length: progress.WORDS_PER_PACK }, (_, i) => `<span class="${i < state.towardPack ? 'full' : ''}"></span>`).join('')}
-      </div>
-      <div class="counter"><span class="icon">💎</span><span id="gem-count">${state.gems}</span></div>
+      <span id="holo-slot">${state.holoCharged ? '<span class="holo-charge">✨ HOLO</span>' : ''}</span>
+      <div class="orb-meter" id="orb-meter" aria-label="Orbs until the next wild critter">${orbMeter()}</div>
     </div>
     <div class="play" id="play">
       <div class="word-row" id="word-row">
@@ -372,6 +506,7 @@ function renderPlay()
         <div class="reveal">${word.picture}</div>
       </div>
       <div class="actions" id="actions">${actionsHtml()}</div>
+      ${buddy ? `<div class="play-buddy" id="play-buddy">${critterPicture(buddy)}</div>` : ''}
     </div>`;
 
   app.onclick = (event) =>
@@ -390,7 +525,7 @@ function renderPlay()
     }
     else if (action === 'tile')
     {
-      onTile(Number(target.dataset.index), target);
+      onTile(Number(target.dataset.index));
     }
     else if (action === 'blend')
     {
@@ -422,16 +557,11 @@ function tileHtml(tile, index)
   {
     classes.push('silent');
   }
-  // Each block cracks further as the word is worked: a crack when it's
-  // heard, more once they all have been. Never so much that the letter,
-  // which he still has to read, gets lost in it.
-  const crack = session.phase !== 'tap' ? 2 : session.heard.has(index) ? 1 : 0;
-  // Where this block flies when the word breaks open.
+  // Where this letter flies when the word bursts.
   const dx = `${Math.round((index - (session.word.tiles.length - 1) / 2) * 40 + (Math.random() * 30 - 15))}vw`;
   const spin = `${Math.round(Math.random() * 360 - 180)}deg`;
   return `
-    <button class="tile ${classes.join(' ')}" data-action="tile" data-index="${index}" style="--dx: ${dx}; --spin: ${spin}">
-      <span class="crack" style="${crack > 0 ? `background-image: url('art/crack${crack}.png')` : ''}"></span>
+    <button class="${classes.join(' ')}" data-action="tile" data-index="${index}" style="--dx: ${dx}; --spin: ${spin}">
       <span class="letter">${tile.text}</span>
     </button>`;
 }
@@ -441,7 +571,7 @@ function actionsHtml()
   const replay = '<button class="icon-button" data-action="replay" aria-label="Hear the sounds again">🔊</button>';
   if (session.phase === 'blend')
   {
-    return `${replay}<button class="block-button gold pickaxe-button" data-action="blend">⛏️ Blend!</button>`;
+    return `${replay}<button class="pill gold blend-button" data-action="blend">✨ Blend!</button>`;
   }
   if (session.phase === 'choose')
   {
@@ -466,13 +596,13 @@ function refreshPlay()
 async function playTile(index)
 {
   const tile = session.word.tiles[index];
-  sounds.crack();
+  sounds.tap();
   const element = document.querySelector(`.tile[data-index="${index}"]`);
   element?.classList.add('pop');
   setTimeout(() => element?.classList.remove('pop'), 180);
   if (tile.sound === null)
   {
-    sounds.gem();
+    sounds.chime();
     return;
   }
   await sounds.play(tile.sound);
@@ -486,7 +616,7 @@ function onTile(index)
   }
   if (session.phase !== 'tap')
   {
-    // Any block can be heard again once they all have been.
+    // Any letter can be heard again once they all have been.
     playTile(index);
     return;
   }
@@ -511,7 +641,7 @@ function onTile(index)
     session.phase = 'blend';
     if (session.rounds < TALKATIVE_ROUNDS)
     {
-      setTimeout(() => say('Now swing the pickaxe to blend the sounds together!'), 600);
+      setTimeout(() => say('Now tap Blend to put the sounds together!'), 600);
     }
   }
   refreshPlay();
@@ -526,7 +656,7 @@ async function onBlend()
   session.busy = true;
   const row = document.getElementById('word-row');
   row.classList.add('blending');
-  sounds.crack();
+  sounds.tap();
   const keys = soundKeys(session.word);
   // Once slowly, then run together - the way you'd sound it out aloud.
   await sounds.sequence(keys, { gapMs: 380 });
@@ -592,15 +722,16 @@ async function onChoice(chosen, button)
   sounds.correct();
   await wait(250);
   document.getElementById('word-row')?.classList.add('broken');
-  sounds.shatter();
-  floatGems(result.gems);
+  sounds.burst();
+  floatOrb();
+  cheer();
   await say(`${word.word}!`);
 
-  if (result.streakBonus)
+  if (result.holoCharged)
   {
-    banner(`${state.streak} IN A ROW! +${progress.STREAK_BONUS_GEMS} 💎`);
-    sounds.gem();
-    await say(`${state.streak} in a row!`);
+    banner(`${progress.HOLO_STREAK} IN A ROW! ✨ HOLO READY`);
+    sounds.sparkle();
+    await say(`${progress.HOLO_STREAK} in a row! The next critter you catch will be a shiny holo card!`);
   }
 
   const reward = progress.claimWorldReward(state, world, sounds.available());
@@ -609,17 +740,21 @@ async function onChoice(chosen, button)
     commit(reward.state);
     sounds.fanfare();
     confetti();
-    banner('WORLD COMPLETE! ⭐');
+    banner(`🏅 ${world.name.toUpperCase()} BADGE!`);
     const last = WORLDS[WORLDS.length - 1].id === world.id;
     await say(last
-      ? `Amazing! You finished ${world.name}! You're a master miner!`
-      : `Amazing! You finished ${world.name}! A new world is open, and you get a special card pack!`);
+      ? `Amazing! You finished ${world.name}! You're a master catcher! A special critter is coming!`
+      : `Amazing! You finished ${world.name}! You got a badge, a new place is open, and a special critter is coming!`);
   }
 
-  await wait(700);
-  if (result.packEarned || reward.claimed)
+  await wait(600);
+  if (result.evolution)
   {
-    await showPacks();
+    await showEvolution(critterById(result.evolution.from), critterById(result.evolution.to));
+  }
+  if (result.encounterReady || reward.claimed)
+  {
+    await showEncounters(world.critterTypes);
   }
   if (session !== round)
   {
@@ -627,11 +762,11 @@ async function onChoice(chosen, button)
   }
   session.previous = word.word;
   session.rounds += 1;
-  setSky(world.biome);
+  setScene(world.scene);
   nextRound();
 }
 
-function floatGems(count)
+function floatOrb()
 {
   const play = document.getElementById('play');
   if (!play)
@@ -639,16 +774,33 @@ function floatGems(count)
     return;
   }
   const float = document.createElement('div');
-  float.className = 'float-gems';
-  float.textContent = `+${count} 💎`;
+  float.className = 'float-orb';
+  float.innerHTML = orbSvg();
   play.appendChild(float);
-  setTimeout(() => float.remove(), 1500);
-  sounds.gem();
-  const counter = document.getElementById('gem-count');
-  if (counter)
+  setTimeout(() => float.remove(), 1400);
+  sounds.chime();
+  const meter = document.getElementById('orb-meter');
+  if (meter)
   {
-    counter.textContent = state.gems;
+    meter.innerHTML = orbMeter();
   }
+  const holo = document.getElementById('holo-slot');
+  if (holo)
+  {
+    holo.innerHTML = state.holoCharged ? '<span class="holo-charge">✨ HOLO</span>' : '';
+  }
+}
+
+function cheer()
+{
+  const buddy = document.getElementById('play-buddy');
+  if (!buddy)
+  {
+    return;
+  }
+  buddy.classList.remove('cheer');
+  void buddy.offsetWidth;
+  buddy.classList.add('cheer');
 }
 
 function banner(text)
@@ -663,7 +815,7 @@ function banner(text)
 
 function confetti()
 {
-  const colors = ['#ffd23f', '#4fe3d0', '#5ccf5c', '#e55d5d', '#9fd0ff', '#c9b3f2'];
+  const colors = ['#ffd23f', '#5ff2e0', '#4fd66a', '#ff5d8f', '#7fbcff', '#b7a4ff'];
   for (let i = 0; i < 40; i++)
   {
     const piece = document.createElement('div');
@@ -676,103 +828,173 @@ function confetti()
   }
 }
 
-// --- card packs ------------------------------------------------------------------
+// --- wild encounters --------------------------------------------------------------
 
-// Opens every waiting pack, one at a time; resolves when he's done.
-function showPacks()
+// Every waiting wild critter, one after another; resolves when he's caught
+// them all. [homeTypes] are the kinds at home where he's reading.
+async function showEncounters(homeTypes)
+{
+  while (progress.encountersWaiting(state) > 0)
+  {
+    const spent = progress.spendEncounter(state);
+    commit(spent.state);
+    await runEncounter(spent.kind === 'special', homeTypes);
+  }
+  closeOverlay();
+}
+
+// One encounter: the critter appears, he taps the orb to throw it, it
+// rocks three times, and click - caught. Always caught: this is his reward,
+// not a test.
+function runEncounter(special, homeTypes)
 {
   return new Promise((resolve) =>
   {
-    openOnePack(() =>
+    const critter = wildEncounter(state.caught, Math.random, { homeTypes, special });
+    const legendary = critter.rarity === 'legendary';
+    overlay.hidden = false;
+    overlay.innerHTML = `
+      <div class="overlay-text">${legendary ? '⚡ A LEGENDARY critter! ⚡' : special ? '🏅 A special critter!' : `A wild ${critter.name}!`}</div>
+      <div class="encounter ${special || legendary ? 'special' : ''}" id="encounter">
+        <div class="ground"></div>
+        <div class="wild" id="wild">${critterPicture(critter)}</div>
+        <button class="throw-orb" id="throw" aria-label="Throw the orb">${orbSvg({ lit: state.holoCharged })}</button>
+      </div>
+      <div class="overlay-text" id="encounter-hint">${state.holoCharged ? '✨ Holo orb! ✨ ' : ''}Tap the orb!</div>`;
+    if (legendary)
     {
-      overlay.hidden = true;
-      overlay.innerHTML = '';
-      resolve();
-    });
-  });
-}
-
-function openOnePack(done)
-{
-  const spent = progress.spendPack(state);
-  if (!spent.minRarity)
-  {
-    done();
-    return;
-  }
-  commit(spent.state);
-  const critter = openPack(state.cards, Math.random, { minRarity: spent.minRarity });
-  const isNew = (state.cards[critter.id] ?? 0) === 0;
-  commit(progress.addCard(state, critter.id));
-  const special = spent.minRarity === 'rare';
-
-  overlay.hidden = false;
-  overlay.innerHTML = `
-    <div class="overlay-text">${special ? 'SPECIAL PACK!' : 'CARD PACK!'}<br>TAP TAP TAP!</div>
-    <button class="pack ${special ? 'rare-pack' : ''}" id="pack" aria-label="Open the pack">⛏️</button>`;
-  say(special ? 'A special card pack! Tap it to break it open!' : 'You got a card pack! Tap it to break it open!');
-
-  let taps = 0;
-  const pack = document.getElementById('pack');
-  pack.onclick = () =>
-  {
-    sounds.unlock();
-    taps += 1;
-    sounds.crack();
-    pack.classList.remove('shake');
-    void pack.offsetWidth;
-    pack.classList.add('shake');
-    if (taps < 3)
-    {
-      return;
-    }
-    pack.onclick = null;
-    pack.classList.add('burst');
-    sounds.sparkle();
-    setTimeout(() => revealCard(critter, isNew, done), 450);
-  };
-}
-
-function revealCard(critter, isNew, done)
-{
-  const more = progress.packsWaiting(state) > 0;
-  overlay.innerHTML = `
-    <div class="flip-in">${cardHtml(critter, { big: true, isNew, count: state.cards[critter.id] })}</div>
-    <div>
-      ${more ? '<button class="block-button gold" data-action="next-pack">🎁 Next pack</button>' : ''}
-      <button class="block-button green" data-action="close">⛏️ Keep mining!</button>
-    </div>`;
-  drawSprites(overlay, critterById);
-  tiltable(overlay.querySelector('.card.big'));
-  if (critter.rarity === 'rare' || critter.rarity === 'legendary')
-  {
-    confetti();
-    sounds.fanfare();
-  }
-  say(isNew ? `A new card! ${critter.name}!` : `${critter.name}! You have ${state.cards[critter.id]} now.`);
-  overlay.onclick = (event) =>
-  {
-    const target = event.target.closest('[data-action]');
-    if (!target)
-    {
-      return;
-    }
-    overlay.onclick = null;
-    if (target.dataset.action === 'next-pack')
-    {
-      openOnePack(done);
+      sounds.fanfare();
     }
     else
     {
-      done();
+      sounds.sparkle();
     }
-  };
+    say(legendary
+      ? `Whoa! It's ${critter.name}, a legendary critter! Tap the orb to catch it!`
+      : `A wild ${critter.name} appeared! Tap the orb to catch it!`);
+
+    const orb = document.getElementById('throw');
+    orb.onclick = async () =>
+    {
+      orb.onclick = null;
+      sounds.unlock();
+      document.getElementById('encounter-hint').textContent = '';
+      orb.classList.add('thrown');
+      sounds.whoosh();
+      await wait(600);
+      const encounter = document.getElementById('encounter');
+      encounter.insertAdjacentHTML('beforeend', '<div class="catch-flash"></div>');
+      document.getElementById('wild').classList.add('caught');
+      orb.classList.remove('thrown');
+      orb.classList.add('landed');
+      await wait(700);
+      for (let i = 0; i < 3; i++)
+      {
+        orb.classList.remove('wobble');
+        void orb.offsetWidth;
+        orb.classList.add('wobble');
+        sounds.wobble();
+        await wait(850);
+      }
+      orb.classList.remove('wobble');
+      orb.classList.add('shut');
+      sounds.click();
+      await wait(300);
+      const caught = progress.catchCritter(state, critter.id);
+      commit(caught.state);
+      sounds.fanfare();
+      confetti();
+      await showCardReveal(critter, {
+        isNew: caught.isNew || caught.isNewHolo,
+        holo: caught.holo,
+        line: `Gotcha! You caught ${critter.name}!`,
+        speech: caught.holo
+          ? `Gotcha! You caught ${critter.name}, on a shiny holo card!`
+          : caught.isNew ? `Gotcha! You caught ${critter.name}! A new one for your book!` : `Gotcha! Another ${critter.name}!`,
+        more: progress.encountersWaiting(state) > 0,
+      });
+      resolve();
+    };
+  });
 }
 
-// A big card follows his finger: it tilts toward it, and on a holofoil
-// card the foil's rainbow and sparkle slide with it, the way a real one
-// catches the light as it's turned. Let go and it settles back, and the
-// foil goes back to drifting on its own.
+// A card, big and tiltable, with a line above it; resolves on the button.
+function showCardReveal(critter, { isNew = false, holo = false, line, speech, more = false })
+{
+  return new Promise((resolve) =>
+  {
+    overlay.hidden = false;
+    overlay.innerHTML = `
+      <div class="overlay-text">${line}</div>
+      <div class="flip-in">${cardHtml(critter, { big: true, isNew, holo })}</div>
+      <div class="overlay-buttons">
+        <button class="pill ${more ? 'wild' : 'go'}" data-action="done">${more ? '❗ Next wild critter' : '▶ Keep going!'}</button>
+      </div>`;
+    tiltable(overlay.querySelector('.card.big'));
+    sounds.sparkle();
+    say(speech);
+    overlay.onclick = (event) =>
+    {
+      if (event.target.closest('[data-action="done"]'))
+      {
+        overlay.onclick = null;
+        resolve();
+      }
+    };
+  });
+}
+
+// --- evolving ---------------------------------------------------------------------
+
+// His buddy grows: "What? It's evolving!", the two forms flicker in white
+// faster and faster, a flash, and there's the new one. Then its card.
+async function showEvolution(from, to)
+{
+  overlay.hidden = false;
+  overlay.innerHTML = `
+    <div class="overlay-text" id="evolve-text">What? ${from.name} is evolving!</div>
+    <div class="evolve-stage" id="evolve-stage">
+      <div class="form old">${critterPicture(from)}</div>
+      <div class="form new hidden">${critterPicture(to)}</div>
+    </div>`;
+  const stage = document.getElementById('evolve-stage');
+  const oldForm = stage.querySelector('.form.old');
+  const newForm = stage.querySelector('.form.new');
+  await say(`What? ${from.name} is evolving!`);
+  stage.classList.add('flicker');
+  sounds.shimmer(3);
+  let gap = 420;
+  let showingNew = false;
+  while (gap > 60)
+  {
+    showingNew = !showingNew;
+    oldForm.classList.toggle('hidden', showingNew);
+    newForm.classList.toggle('hidden', !showingNew);
+    await wait(gap);
+    gap *= 0.8;
+  }
+  oldForm.classList.add('hidden');
+  newForm.classList.remove('hidden');
+  overlay.insertAdjacentHTML('beforeend', '<div class="catch-flash"></div>');
+  stage.classList.remove('flicker');
+  stage.classList.add('done');
+  sounds.fanfare();
+  confetti();
+  document.getElementById('evolve-text').textContent = `${from.name} evolved into ${to.name}!`;
+  await say(`${from.name} evolved into ${to.name}!`);
+  await wait(500);
+  await showCardReveal(to, {
+    isNew: (state.caught[to.id] ?? 0) === 1,
+    line: `${to.name} is your buddy now!`,
+    speech: `${to.name}! ${to.move}!`,
+  });
+  closeOverlay();
+}
+
+// A big card follows his finger: it tilts toward it, and on a foil card the
+// foil's rainbow and sparkle slide with it, the way a real one catches the
+// light as it's turned. Let go and it settles back, and the foil goes back
+// to drifting on its own.
 function tiltable(card)
 {
   if (!card)
@@ -801,29 +1023,36 @@ function tiltable(card)
   card.addEventListener('pointercancel', settle);
 }
 
-// --- the card binder ---------------------------------------------------------------
+// --- the Critter Book ---------------------------------------------------------------
 
-function renderCollection()
+// Every critter, line by line - baby, middle, final - then the legendaries,
+// then a holo slot for each.
+function renderBook()
 {
   clearIdle();
-  setSky('stone');
-  const owned = CRITTERS.filter((critter) => (state.cards[critter.id] ?? 0) > 0).length;
+  setScene('night');
+  const book = progress.bookCounts(state);
+  const lines = CRITTERS.filter((critter) => critter.rarity !== 'legendary');
+  const legendaries = CRITTERS.filter((critter) => critter.rarity === 'legendary');
+  const slot = (critter, holo) =>
+  {
+    const count = holo ? state.holo[critter.id] ?? 0 : state.caught[critter.id] ?? 0;
+    const isBuddy = !holo && state.buddy === critter.id;
+    return `<button class="${isBuddy ? 'buddy-mark' : ''}" data-action="card" data-id="${critter.id}" data-holo="${holo ? 1 : 0}">${cardHtml(critter, { count, unknown: count === 0, holo })}</button>`;
+  };
   app.innerHTML = `
     <div class="topbar">
       <button class="icon-button" data-action="home" aria-label="Map">🏠</button>
-      <span class="screen-title">MY CARDS ${owned} / ${CRITTERS.length}</span>
+      <span class="screen-title">CRITTER BOOK ${book.caught} / ${book.total}</span>
       <span class="spacer"></span>
     </div>
-    <div class="collection-body">
-      <div class="collection-grid">
-        ${CRITTERS.map((critter) =>
-        {
-          const count = state.cards[critter.id] ?? 0;
-          return `<button data-action="card" data-id="${critter.id}">${cardHtml(critter, { count, unknown: count === 0 })}</button>`;
-        }).join('')}
-      </div>
+    <div class="book-body">
+      <div class="book-grid">${lines.map((critter) => slot(critter, false)).join('')}</div>
+      <h2>⚡ Legendary</h2>
+      <div class="book-grid">${legendaries.map((critter) => slot(critter, false)).join('')}</div>
+      <h2>✨ Holo cards ${book.holo} / ${book.total}</h2>
+      <div class="book-grid">${CRITTERS.map((critter) => slot(critter, true)).join('')}</div>
     </div>`;
-  drawSprites(app, critterById);
   app.onclick = (event) =>
   {
     const target = event.target.closest('[data-action]');
@@ -838,31 +1067,58 @@ function renderCollection()
       return;
     }
     const critter = critterById(target.dataset.id);
-    if ((state.cards[critter.id] ?? 0) === 0)
+    const holo = target.dataset.holo === '1';
+    const owned = holo ? state.holo[critter.id] ?? 0 : state.caught[critter.id] ?? 0;
+    if (owned === 0)
     {
-      say('Find this one in a card pack!');
+      if (holo)
+      {
+        say('Read three words in a row right the first time, and your next catch will be a holo card!');
+      }
+      else if (critter.evolvesFrom)
+      {
+        say(`Help ${critterById(critter.evolvesFrom).name} grow to find this one!`);
+      }
+      else if (critter.rarity === 'legendary')
+      {
+        say('A legendary critter! It hardly ever shows up. Keep reading!');
+      }
+      else
+      {
+        say('Catch this one in the wild!');
+      }
       return;
     }
-    showBigCard(critter);
+    showBigCard(critter, holo);
   };
 }
 
-function showBigCard(critter)
+function showBigCard(critter, holo = false)
 {
+  const isBuddy = state.buddy === critter.id;
   overlay.hidden = false;
   overlay.innerHTML = `
-    ${cardHtml(critter, { big: true, count: state.cards[critter.id] })}
-    <button class="block-button" data-action="close">Close</button>`;
-  drawSprites(overlay, critterById);
+    ${cardHtml(critter, { big: true, holo, count: holo ? state.holo[critter.id] : state.caught[critter.id] })}
+    <div class="overlay-buttons">
+      ${isBuddy ? '' : `<button class="pill gold" data-action="buddy">⭐ Make ${critter.name} my buddy</button>`}
+      <button class="pill" data-action="close">Close</button>
+    </div>`;
   tiltable(overlay.querySelector('.card.big'));
   say(`${critter.name}. ${critter.move}!`);
   overlay.onclick = (event) =>
   {
-    if (event.target.closest('[data-action="close"]'))
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'close')
     {
-      overlay.onclick = null;
-      overlay.hidden = true;
-      overlay.innerHTML = '';
+      closeOverlay();
+    }
+    else if (action === 'buddy')
+    {
+      commit(progress.chooseBuddy(state, critter.id));
+      closeOverlay();
+      sounds.fanfare();
+      say(`${critter.name} is your buddy now!`);
+      renderBook();
     }
     else if (event.target.closest('.card'))
     {
@@ -878,12 +1134,12 @@ let activeRecording = null;
 function renderParent()
 {
   clearIdle();
-  setSky('stone');
+  setScene('night');
   const available = sounds.available();
   const totalRight = Object.values(state.words).reduce((sum, stats) => sum + stats.right, 0);
   const wordsRead = Object.values(state.words).filter((stats) => stats.right > 0).length;
   const trouble = progress.troubleWords(state);
-  const owned = CRITTERS.filter((critter) => (state.cards[critter.id] ?? 0) > 0).length;
+  const book = progress.bookCounts(state);
 
   app.innerHTML = `
     <div class="topbar">
@@ -891,8 +1147,15 @@ function renderParent()
       <span class="screen-title">GROWN-UPS</span>
     </div>
     <div class="parent">
+      <h2>How it works</h2>
+      <p>He taps each letter to hear its sound, taps Blend to hear them run together, then picks the picture that
+      matches. Every word read right earns a Catch Orb; five orbs and a wild critter appears to catch. His buddy
+      critter grows with every word and evolves twice, into bigger and fiercer forms. Three words in a row right the
+      first time makes his next catch a holo card. Reading enough different words in a place earns its badge and
+      opens the next one.</p>
+
       <h2>Letter sounds</h2>
-      <p>The game plays these sounds as he taps each block. It comes with free recordings of all of them except
+      <p>The game plays these sounds as he taps each letter. It comes with free recordings of all of them except
       <strong>b</strong> - record that one and the words with a b in them join the game. You can record over any
       sound you'd like in your own voice: tap Record, say just the sound (<em>"b"</em>, not <em>"buh"</em> - as short
       as you can), and tap Stop. It trims the silence itself.</p>
@@ -911,7 +1174,7 @@ function renderParent()
         <div class="stat">Words read right: <strong>${totalRight}</strong></div>
         <div class="stat">Different words: <strong>${wordsRead}</strong></div>
         <div class="stat">Best streak: <strong>${state.bestStreak}</strong></div>
-        <div class="stat">Cards: <strong>${owned} / ${CRITTERS.length}</strong></div>
+        <div class="stat">Critters: <strong>${book.caught} / ${book.total}</strong>, holo <strong>${book.holo}</strong></div>
         ${WORLDS.map((world) => `<div class="stat">${world.name} (${world.focus}): <strong>${progress.wordsLearned(state, world, available)} / ${progress.worldGoal(world, available)}</strong></div>`).join('')}
       </div>
       <p>${trouble.length > 0 ? `Words he's finding hard: <strong>${trouble.slice(0, 12).join(', ')}</strong>` : 'No trouble words yet.'}</p>
@@ -926,8 +1189,8 @@ function renderParent()
       <h2>Credits</h2>
       <p>Letter sounds: <a href="https://freesound.org/people/margo_heston/packs/12249/">"English Phonemes" by margo_heston</a>
       on Freesound, <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a> - trimmed and evened out
-      for the game. Fonts: Andika (SIL) and Press Start 2P (CodeMan38), both under the SIL Open Font License. Everything
-      else - the critters, blocks and words - was made for this game.</p>
+      for the game. Fonts: Andika (SIL) and Fredoka (Milena Brandão), both under the SIL Open Font License.
+      Everything else - the critters, orbs and words - was made for this game.</p>
     </div>`;
 
   app.onchange = (event) =>
@@ -935,7 +1198,7 @@ function renderParent()
     if (event.target.dataset.setting === 'voice')
     {
       applySettings({ ...settings, voice: event.target.value });
-      say("Hi, miner! Let's read some words!");
+      say("Hi, catcher! Let's read some words!");
     }
   };
   // The voice list can arrive a moment after the page loads.
@@ -962,7 +1225,14 @@ function renderParent()
     const { action, key } = target.dataset;
     if (action === 'home')
     {
-      renderHome();
+      if (state.buddy)
+      {
+        renderHome();
+      }
+      else
+      {
+        renderStarters();
+      }
     }
     else if (action === 'play-sound')
     {
@@ -980,7 +1250,7 @@ function renderParent()
     }
     else if (action === 'test-voice')
     {
-      say("Hi, miner! Let's read some words!");
+      say("Hi, catcher! Let's read some words!");
     }
     else if (action === 'speed')
     {
@@ -990,7 +1260,7 @@ function renderParent()
     }
     else if (action === 'reset')
     {
-      if (window.confirm('Reset all progress - gems, words and cards? This cannot be undone.'))
+      if (window.confirm('Reset all progress - words, critters and badges? This cannot be undone.'))
       {
         commit(progress.initialState());
         renderParent();
@@ -1062,7 +1332,7 @@ async function toggleRecording(key, button)
   }
   catch (error)
   {
-    window.alert("The microphone isn't available. Check that Word Miner is allowed to use it in Settings.");
+    window.alert("The microphone isn't available. Check that Word Catcher is allowed to use it in Settings.");
   }
 }
 
@@ -1104,11 +1374,12 @@ if ('speechSynthesis' in window)
 }
 configureVoice({ voiceURI: settings.voice, rate: speechRate(settings) });
 // Checking a screen's layout on a device or simulator, without playing
-// through to it: ?preview=home, play, choose, collection, pack, gate, card
-// (&id= a critter) or parent
+// through to it: ?preview=home, starters, play, choose, book, encounter
+// (&throw=1), evolve, gate, card (&id= a critter, &holo=1) or parent (&section=voice)
 // opens straight on that screen with made-up progress that is never saved,
 // and shows any error on screen. Nothing in the game links here.
-const preview = new URLSearchParams(window.location.search).get('preview');
+const params = new URLSearchParams(window.location.search);
+const preview = params.get('preview');
 if (preview)
 {
   window.addEventListener('error', (event) =>
@@ -1120,23 +1391,30 @@ if (preview)
   // screens only need to know which there would be.
   sounds.available = () => new Set(SOUND_KEYS.filter((key) => !RECORD_ONLY.includes(key)));
   let sample = progress.initialState();
+  for (const id of ['budlet', 'emberkit', 'splashy', 'zippy', 'glimmer', 'cloudlet', 'glacior'])
+  {
+    sample = progress.catchCritter(sample, id).state;
+  }
+  sample.holoCharged = true;
+  sample = progress.catchCritter(sample, 'emberkit').state;
+  sample = progress.chooseBuddy(sample, 'budlet');
   for (const word of WORLDS[0].words.slice(0, 7))
   {
     sample = progress.recordAnswer(sample, word.word, { correct: true, firstTry: true }).state;
   }
-  for (const id of ['mossy', 'emberkit', 'splashy', 'thunderpup', 'glacior', 'duskbat', 'stormhawk'])
-  {
-    sample = progress.addCard(sample, id);
-  }
-  sample.packs = 1;
+  sample.encounters = 1;
   state = sample;
   if (preview === 'home')
   {
     renderHome();
   }
+  else if (preview === 'starters')
+  {
+    renderStarters();
+  }
   else if (preview === 'play' || preview === 'choose')
   {
-    startWorld(new URLSearchParams(window.location.search).get('world') ?? 'meadow');
+    startWorld(params.get('world') ?? 'meadow');
     if (preview === 'choose')
     {
       session.word.tiles.forEach((_, i) => session.heard.add(i));
@@ -1145,20 +1423,30 @@ if (preview)
       refreshPlay();
     }
   }
-  else if (preview === 'collection')
+  else if (preview === 'book' || preview === 'collection')
   {
-    renderCollection();
+    renderBook();
   }
-  else if (preview === 'pack')
+  else if (preview === 'encounter')
   {
     renderHome();
-    showPacks();
+    showEncounters(['grass']);
+    // &throw=1 throws the orb too, to see the catch play out.
+    if (params.get('throw'))
+    {
+      setTimeout(() => document.getElementById('throw')?.click(), 1500);
+    }
+  }
+  else if (preview === 'evolve')
+  {
+    renderHome();
+    const from = critterById(params.get('id') ?? 'leafpup');
+    showEvolution(critterById(from.evolvesFrom) ?? from, from);
   }
   else if (preview === 'parent')
   {
     renderParent();
-    // ?preview=parent&section=voice jumps to that section.
-    const section = new URLSearchParams(window.location.search).get('section');
+    const section = params.get('section');
     if (section)
     {
       setTimeout(() => document.getElementById(section)?.scrollIntoView(), 300);
@@ -1171,8 +1459,8 @@ if (preview)
   }
   else if (preview === 'card')
   {
-    renderCollection();
-    showBigCard(critterById(new URLSearchParams(window.location.search).get('id') ?? 'glacior'));
+    renderBook();
+    showBigCard(critterById(params.get('id') ?? 'glacior'), params.get('holo') === '1');
   }
   else
   {
