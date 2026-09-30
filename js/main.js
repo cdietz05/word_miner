@@ -200,6 +200,9 @@ function renderStarters()
         line: `${chosen.name} is your buddy!`,
         speech: `${chosen.name} is your buddy! Read words together and ${chosen.name} will grow.`,
       });
+      // showCardReveal leaves the card up for whoever called it to take
+      // down - here, nothing comes after it.
+      closeOverlay();
       renderHome();
       say('Pick a place to explore!');
     }
@@ -919,6 +922,9 @@ function runEncounter(special, homeTypes)
 }
 
 // A card, big and tiltable, with a line above it; resolves on the button.
+// The card is still up when it resolves - so a run of catches doesn't
+// flash the screen behind between them - and the caller must close the
+// overlay (closeOverlay) once it has nothing more to show there.
 function showCardReveal(critter, { isNew = false, holo = false, line, speech, more = false })
 {
   return new Promise((resolve) =>
