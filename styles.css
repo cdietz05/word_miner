@@ -651,9 +651,11 @@ button
   transform: scale(1.12) translateY(-6px);
 }
 
-.word-row.blending .tile
+.tile.sounding
 {
-  animation: squish 0.5s ease-in-out;
+  transform: translateY(-10px) scale(1.08);
+  background: linear-gradient(#ffffff, #b8f7ff);
+  box-shadow: 0 10px 0 #4fb8c9, 0 13px 0 var(--ink), 0 0 0 6px var(--orb), 0 0 30px var(--orb);
 }
 
 .word-row.broken .tile
@@ -1583,11 +1585,6 @@ button
 @keyframes bounce
 {
   50% { transform: translateY(-14px); }
-}
-
-@keyframes squish
-{
-  50% { transform: scaleX(0.85) translateY(4px); }
 }
 
 @keyframes fly

@@ -421,11 +421,6 @@ function startWorld(worldId)
   }
 }
 
-function soundKeys(word)
-{
-  return word.tiles.map((tile) => tile.sound);
-}
-
 function nextRound()
 {
   const words = playableWords(session.world, sounds.available());
@@ -470,11 +465,11 @@ function armIdleHint()
     }
     else if (session.phase === 'blend')
     {
-      say('Tap Blend to put the sounds together!');
+      say('Tap Blend to hear all the sounds!');
     }
     else if (session.phase === 'choose')
     {
-      say('Which picture is it? Tap the speaker to hear the sounds again.');
+      say('Say the sounds fast, then tap the picture. Tap the speaker to hear the sounds again.');
     }
   }, IDLE_HINT_MS);
 }
@@ -644,10 +639,36 @@ function onTile(index)
     session.phase = 'blend';
     if (session.rounds < TALKATIVE_ROUNDS)
     {
-      setTimeout(() => say('Now tap Blend to put the sounds together!'), 600);
+      setTimeout(() => say('Now tap Blend to hear all the sounds!'), 600);
     }
   }
   refreshPlay();
+}
+
+// The word's sounds, each once, slowly and clearly, left to right, each
+// letter lighting up as its sound plays - the way a finger slides under a
+// word being sounded out. Putting them together is his job: the letter
+// recordings are never run together, since stitched-up sounds can't flow
+// like a real word. The real word comes from the voice, once he's picked
+// (see onChoice).
+async function soundOut(word)
+{
+  for (let index = 0; index < word.tiles.length; index++)
+  {
+    const tile = word.tiles[index];
+    const element = document.querySelector(`.tile[data-index="${index}"]`);
+    element?.classList.add('sounding');
+    if (tile.sound === null)
+    {
+      await wait(350);
+    }
+    else
+    {
+      await sounds.play(tile.sound);
+      await wait(350);
+    }
+    element?.classList.remove('sounding');
+  }
 }
 
 async function onBlend()
@@ -657,21 +678,14 @@ async function onBlend()
     return;
   }
   session.busy = true;
-  const row = document.getElementById('word-row');
-  row.classList.add('blending');
-  sounds.tap();
-  const keys = soundKeys(session.word);
-  // Once slowly, then run together - the way you'd sound it out aloud.
-  await sounds.sequence(keys, { gapMs: 380 });
-  await wait(250);
-  await sounds.sequence(keys, { gapMs: 30 });
+  await soundOut(session.word);
   session.choices = pickChoices(session.word, session.world.words, Math.random);
   session.phase = 'choose';
   session.busy = false;
   refreshPlay();
   if (session.rounds < TALKATIVE_ROUNDS)
   {
-    say('Which picture is it?');
+    say('Now say the sounds fast. Which picture is it?');
   }
 }
 
@@ -682,7 +696,7 @@ async function replaySounds()
     return;
   }
   session.busy = true;
-  await sounds.sequence(soundKeys(session.word), { gapMs: 300 });
+  await soundOut(session.word);
   session.busy = false;
 }
 
@@ -707,8 +721,8 @@ async function onChoice(chosen, button)
     }
     else
     {
-      await say('Not quite. Listen again.');
-      await sounds.sequence(soundKeys(word), { gapMs: 300 });
+      await say('Not quite. Listen again, and say them fast.');
+      await soundOut(word);
     }
     session.busy = false;
     return;
@@ -1154,8 +1168,8 @@ function renderParent()
     </div>
     <div class="parent">
       <h2>How it works</h2>
-      <p>He taps each letter to hear its sound, taps Blend to hear them run together, then picks the picture that
-      matches. Every word read right earns a Catch Orb; five orbs and a wild critter appears to catch. His buddy
+      <p>He taps each letter to hear its sound, taps Blend to hear them all again in a row, says them fast himself,
+      then picks the picture that matches - and the voice says the word. Every word read right earns a Catch Orb; five orbs and a wild critter appears to catch. His buddy
       critter grows with every word and evolves twice, into bigger and fiercer forms. Three words in a row right the
       first time makes his next catch a holo card. Reading enough different words in a place earns its badge and
       opens the next one.</p>

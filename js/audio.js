@@ -139,21 +139,6 @@ export class Sounds
     });
   }
 
-  // The sounds of a word one after another - with a pause between them
-  // for the slow version, run together for the blend.
-  async sequence(keys, { gapMs = 350, rate = 1 } = {})
-  {
-    for (const key of keys)
-    {
-      if (key === null)
-      {
-        continue;
-      }
-      await this.play(key, { rate });
-      await wait(gapMs);
-    }
-  }
-
   // --- game noises, made on the spot so there are no files to load ---------
 
   tone(frequency, duration, { type = 'square', volume = 0.12, slideTo = null, delay = 0 } = {})
