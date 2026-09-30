@@ -72,6 +72,13 @@ check that keeps him out). It has:
 - **Letter sounds.** The bundled recordings have no "b", so words with a b
   stay out of the game until you record one here. Any other sound can be
   re-recorded in your own voice too; the game trims the silence itself.
+- **Where letter sounds come from.** The recordings (the default), or the
+  iPad's own voice reading a spelling for each sound ("mmm" for m, "ahh" for
+  the a in cat). Sounds you can hold come out clean from the voice; the rest
+  come out with an "uh" after them ("buh"), and it can't say the i in pig at
+  all, so that one stays a recording. The voice can say b, so words with a b
+  play without recording one. Your own recordings are always used first.
+  How each spelling was chosen is in `js/voice_sounds.js`.
 - **Voice.** Pick any English voice on the iPad for the spoken instructions
   and words, and a Slower or Normal speed. (The letter sounds are recordings,
   so they don't change.) More voices can be downloaded in the iPad's Settings,
@@ -119,7 +126,8 @@ python3 -m http.server 8000
 | `js/cards.js` | Critter cards |
 | `js/orb.js` | The Catch Orb |
 | `js/audio.js` | Letter sounds, game noises and the spoken instructions |
-| `js/settings.js` | The grown-ups' voice and speed settings |
+| `js/settings.js` | The grown-ups' voice, speed and letter-sound settings |
+| `js/voice_sounds.js` | Letter sounds from the iPad's voice, and which source each sound plays from |
 | `js/recorder.js` | Parent recordings, kept on the iPad |
 | `js/main.js` | Every screen |
 

@@ -7,7 +7,7 @@
 // Bump VERSION when anything changes, so iPads drop the old copy.
 // tools/check_assets.py checks ASSETS against the files on disk.
 
-const VERSION = 'word-catcher-v6';
+const VERSION = 'word-catcher-v7';
 
 const ASSETS = [
   './',
@@ -25,6 +25,7 @@ const ASSETS = [
   'js/trim.js',
   'js/gate.js',
   'js/settings.js',
+  'js/voice_sounds.js',
   'js/recorder.js',
   'fonts/andika-regular.woff2',
   'fonts/andika-bold.woff2',

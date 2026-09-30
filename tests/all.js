@@ -5,7 +5,8 @@ import { CRITTERS, TYPES, RARITIES, STARTERS, critterById, lineOf, wildEncounter
 import { creatureSvg, BODY_PLANS, PALETTES } from '../js/creature_art.js';
 import { soundSpan } from '../js/trim.js';
 import { grownUpQuestion } from '../js/gate.js';
-import { SPEEDS, englishVoices, chooseVoice, speechRate, loadSettings, saveSettings, defaultSettings } from '../js/settings.js';
+import { VOICE_SPELLINGS, soundSource } from '../js/voice_sounds.js';
+import { SPEEDS, LETTER_SOUNDS, englishVoices, chooseVoice, speechRate, loadSettings, saveSettings, defaultSettings } from '../js/settings.js';
 
 const everySound = new Set(SOUND_KEYS);
 const shipped = new Set(SOUND_KEYS.filter((key) => !RECORD_ONLY.includes(key)));
@@ -627,12 +628,52 @@ test('settings come back as saved, and anything odd falls back to the defaults',
   const store = new Map();
   const storage = { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) };
   equal(loadSettings(storage), defaultSettings());
-  saveSettings(storage, { voice: 'en.daniel', speed: 'slower' });
-  equal(loadSettings(storage), { voice: 'en.daniel', speed: 'slower' });
-  store.set('word_miner_settings', JSON.stringify({ voice: 42, speed: 'warp' }));
-  equal(loadSettings(storage), { voice: null, speed: 'normal' });
+  equal(defaultSettings().letterSounds, 'recordings', 'the recordings until a grown-up picks the voice');
+  saveSettings(storage, { voice: 'en.daniel', speed: 'slower', letterSounds: 'voice' });
+  equal(loadSettings(storage), { voice: 'en.daniel', speed: 'slower', letterSounds: 'voice' });
+  store.set('word_miner_settings', JSON.stringify({ voice: 42, speed: 'warp', letterSounds: 'kazoo' }));
+  equal(loadSettings(storage), { voice: null, speed: 'normal', letterSounds: 'recordings' });
+  store.set('word_miner_settings', JSON.stringify({ voice: 'en.daniel', speed: 'slower' }));
+  equal(loadSettings(storage).letterSounds, 'recordings', 'a save from before the choice existed');
   store.set('word_miner_settings', '{broken');
   equal(loadSettings(storage), defaultSettings());
+});
+
+// --- letter sounds from the voice -------------------------------------------------------
+
+test('every letter sound has a voice spelling, or is marked as one the voice cannot make', () =>
+{
+  equal(Object.keys(VOICE_SPELLINGS).sort(), [...SOUND_KEYS].sort());
+  for (const key of SOUND_KEYS)
+  {
+    const spelling = VOICE_SPELLINGS[key];
+    ok(spelling === null || (typeof spelling === 'string' && spelling.length > 0), key);
+  }
+  ok(Object.keys(LETTER_SOUNDS).includes('recordings') && Object.keys(LETTER_SOUNDS).includes('voice'));
+});
+
+test('a grown-up recording always wins; the voice comes next when chosen, then the bundled one', () =>
+{
+  const bundled = new Set(['a', 'i', 'c', 't']);
+  const recorded = new Set(['t']);
+  equal(soundSource('t', { source: 'voice', bundled, recorded }), 'recorded');
+  equal(soundSource('t', { source: 'recordings', bundled, recorded }), 'recorded');
+  equal(soundSource('c', { source: 'voice', bundled, recorded }), 'voice');
+  equal(soundSource('c', { source: 'recordings', bundled, recorded }), 'bundled');
+});
+
+test('a sound the voice cannot make falls back to the recording', () =>
+{
+  equal(VOICE_SPELLINGS.i, null);
+  equal(soundSource('i', { source: 'voice', bundled: new Set(['i']), recorded: new Set() }), 'bundled');
+});
+
+test('with the voice, b can be played before anyone records it', () =>
+{
+  const bundled = new Set(SOUND_KEYS.filter((key) => !RECORD_ONLY.includes(key)));
+  const none = new Set();
+  equal(soundSource('b', { source: 'recordings', bundled, recorded: none }), null);
+  equal(soundSource('b', { source: 'voice', bundled, recorded: none }), 'voice');
 });
 
 report();

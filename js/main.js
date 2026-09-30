@@ -10,7 +10,8 @@ import { SOUND_KEYS, RECORD_ONLY, SOUND_HINTS, WORLDS, playableWords, pickChoice
 import * as progress from './progress.js';
 import { CRITTERS, STARTERS, TYPES, critterById, wildEncounter } from './critters.js';
 import { Sounds, say, wait, configureVoice, deviceVoices } from './audio.js';
-import { SPEEDS, englishVoices, chooseVoice, speechRate, loadSettings, saveSettings } from './settings.js';
+import { VOICE_SPELLINGS } from './voice_sounds.js';
+import { SPEEDS, LETTER_SOUNDS, englishVoices, chooseVoice, speechRate, loadSettings, saveSettings } from './settings.js';
 import { loadRecordings, saveRecording, deleteRecording, startRecording } from './recorder.js';
 import { cardHtml, critterPicture } from './cards.js';
 import { orbSvg } from './orb.js';
@@ -59,6 +60,7 @@ function applySettings(next)
 {
   settings = next;
   configureVoice({ voiceURI: settings.voice, rate: speechRate(settings) });
+  sounds.source = settings.letterSounds;
   if (saving)
   {
     saveSettings(localStorage, settings);
@@ -1179,6 +1181,15 @@ function renderParent()
       <strong>b</strong> - record that one and the words with a b in them join the game. You can record over any
       sound you'd like in your own voice: tap Record, say just the sound (<em>"b"</em>, not <em>"buh"</em> - as short
       as you can), and tap Stop. It trims the silence itself.</p>
+      <p id="letter-sounds">Letter sounds come from:
+        ${Object.entries(LETTER_SOUNDS).map(([key, option]) => `<button class="small-button ${settings.letterSounds === key ? 'chosen' : ''}" data-action="letter-sounds" data-source="${key}">${option.label}</button>`).join(' ')}
+      </p>
+      <p>${settings.letterSounds === 'voice'
+        ? `The iPad's voice reads a spelling for each sound (tap ▶ to hear one). Sounds you can hold, like <em>m</em>
+          and <em>s</em>, come out clean; the others, like <em>b</em> and <em>t</em>, come out with an "uh" after them
+          ("buh"). It can't say the <em>i</em> in <em>pig</em> at all, so that one stays a recording. Your own
+          recordings are always used first.`
+        : 'Recordings of a real voice saying each sound. Your own recordings are always used first.'}</p>
       <div class="sound-list">
         ${SOUND_KEYS.map((key) => soundRow(key, available)).join('')}
       </div>
@@ -1272,6 +1283,12 @@ function renderParent()
     {
       say("Hi, catcher! Let's read some words!");
     }
+    else if (action === 'letter-sounds')
+    {
+      applySettings({ ...settings, letterSounds: target.dataset.source });
+      renderParent();
+      setTimeout(() => document.getElementById('letter-sounds')?.scrollIntoView(), 50);
+    }
     else if (action === 'speed')
     {
       applySettings({ ...settings, speed: target.dataset.speed });
@@ -1314,7 +1331,20 @@ function soundRow(key, available)
   const recorded = sounds.hasRecording(key);
   const has = available.has(key);
   const needed = !has && RECORD_ONLY.includes(key);
-  const status = recorded ? 'Your recording' : has ? 'Built in' : needed ? 'Needed - record it to add its words' : 'Missing';
+  const from = has ? sounds.sourceOf(key) : null;
+  let status = needed ? 'Needed - record it to add its words' : 'Missing';
+  if (from === 'recorded')
+  {
+    status = 'Your recording';
+  }
+  else if (from === 'voice')
+  {
+    status = `The iPad's voice, reading "${VOICE_SPELLINGS[key]}"`;
+  }
+  else if (from === 'bundled')
+  {
+    status = settings.letterSounds === 'voice' ? "Built in - the voice can't say this one" : 'Built in';
+  }
   const [letters, ...rest] = SOUND_HINTS[key].split(' as in ');
   return `
     <div class="sound-row ${needed ? 'needed' : ''}">
@@ -1393,6 +1423,7 @@ if ('speechSynthesis' in window)
   window.speechSynthesis.getVoices();
 }
 configureVoice({ voiceURI: settings.voice, rate: speechRate(settings) });
+sounds.source = settings.letterSounds;
 // Checking a screen's layout on a device or simulator, without playing
 // through to it: ?preview=home, starters, play, choose, book, encounter
 // (&throw=1), evolve, gate, card (&id= a critter, &holo=1) or parent (&section=voice)
@@ -1408,8 +1439,12 @@ if (preview)
   });
   saving = false;
   // The letter sounds aren't loaded without the start button's tap; the
-  // screens only need to know which there would be.
-  sounds.available = () => new Set(SOUND_KEYS.filter((key) => !RECORD_ONLY.includes(key)));
+  // screens only need to know which there would be, so each gets a stand-in
+  // with no sound in it.
+  for (const key of SOUND_KEYS.filter((sound) => !RECORD_ONLY.includes(sound)))
+  {
+    sounds.buffers.set(key, null);
+  }
   let sample = progress.initialState();
   for (const id of ['budlet', 'emberkit', 'splashy', 'zippy', 'glimmer', 'cloudlet', 'glacior'])
   {

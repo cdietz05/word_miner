@@ -9,6 +9,7 @@
 
 import { soundSpan } from './trim.js';
 import { chooseVoice } from './settings.js';
+import { VOICE_SPELLINGS, soundSource } from './voice_sounds.js';
 
 export class Sounds
 {
@@ -17,6 +18,9 @@ export class Sounds
     this.context = null;
     this.buffers = new Map();
     this.recorded = new Map();
+    // 'recordings' or 'voice' - where the letter sounds come from (see
+    // voice_sounds.js). A grown-up's own recording is used either way.
+    this.source = 'recordings';
   }
 
   // Call from inside a tap. Safe to call on every tap.
@@ -114,16 +118,28 @@ export class Sounds
     return this.recorded.has(key);
   }
 
-  // Every sound that can be played right now, bundled or recorded.
+  // Where [key] would be played from now: 'recorded', 'voice', 'bundled',
+  // or null if it can't be.
+  sourceOf(key)
+  {
+    return soundSource(key, { source: this.source, bundled: new Set(this.buffers.keys()), recorded: new Set(this.recorded.keys()) });
+  }
+
+  // Every sound that can be played right now.
   available()
   {
-    return new Set([...this.buffers.keys(), ...this.recorded.keys()]);
+    return new Set(Object.keys(VOICE_SPELLINGS).filter((key) => this.sourceOf(key) !== null));
   }
 
   // Plays one sound; resolves when it ends.
   play(key, { rate = 1 } = {})
   {
-    const buffer = this.recorded.get(key) ?? this.buffers.get(key);
+    const from = this.sourceOf(key);
+    if (from === 'voice')
+    {
+      return say(VOICE_SPELLINGS[key]);
+    }
+    const buffer = from === 'recorded' ? this.recorded.get(key) : this.buffers.get(key);
     if (!buffer || !this.context)
     {
       return Promise.resolve();

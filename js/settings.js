@@ -1,4 +1,6 @@
-// The grown-ups' settings: which voice reads the game aloud, and how fast.
+// The grown-ups' settings: which voice reads the game aloud, how fast, and
+// whether the letter sounds come from the recordings or from that voice
+// (see voice_sounds.js).
 // Kept apart from his progress, so resetting his progress leaves them alone.
 // Pure apart from load / save, which take the storage to use - the voices
 // are passed in as plain objects ({ name, lang, voiceURI }), so the tests
@@ -9,13 +11,19 @@ export const SPEEDS = {
   normal: { label: 'Normal', rate: 0.9 },
 };
 
+// Where the letter sounds come from.
+export const LETTER_SOUNDS = {
+  recordings: { label: 'The recordings' },
+  voice: { label: "The iPad's voice" },
+};
+
 // The voice used until a grown-up picks one: Samantha, the iPad's own
 // friendly US voice, or failing that any US one.
 const PREFERRED_VOICE = 'Samantha';
 
 export function defaultSettings()
 {
-  return { voice: null, speed: 'normal' };
+  return { voice: null, speed: 'normal', letterSounds: 'recordings' };
 }
 
 // Every English voice on the device, US ones first, each once, by name.
@@ -75,6 +83,7 @@ export function loadSettings(storage)
     return {
       voice: typeof saved.voice === 'string' ? saved.voice : null,
       speed: SPEEDS[saved.speed] ? saved.speed : 'normal',
+      letterSounds: LETTER_SOUNDS[saved.letterSounds] ? saved.letterSounds : 'recordings',
     };
   }
   catch (error)
