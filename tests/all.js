@@ -4,6 +4,7 @@ import * as progress from '../js/progress.js';
 import { CRITTERS, TYPES, RARITIES, openPack, critterSprite, seededRandom } from '../js/critters.js';
 import { soundSpan } from '../js/trim.js';
 import { grownUpQuestion } from '../js/gate.js';
+import { SPEEDS, englishVoices, chooseVoice, speechRate, loadSettings, saveSettings, defaultSettings } from '../js/settings.js';
 
 const everySound = new Set(SOUND_KEYS);
 const shipped = new Set(SOUND_KEYS.filter((key) => !RECORD_ONLY.includes(key)));
@@ -360,6 +361,54 @@ test('the grown-ups question is a times table from 3 to 9, with its answer', () 
     ok(a >= 3 && a <= 9 && b >= 3 && b <= 9, text);
     equal(answer, a * b, text);
   }
+});
+
+// --- voice settings -----------------------------------------------------------------
+
+const VOICES = [
+  { name: 'Thomas', lang: 'fr-FR', voiceURI: 'fr.thomas' },
+  { name: 'Daniel', lang: 'en-GB', voiceURI: 'en.daniel' },
+  { name: 'Samantha', lang: 'en-US', voiceURI: 'en.samantha' },
+  { name: 'Fred', lang: 'en-US', voiceURI: 'en.fred' },
+  { name: 'Karen', lang: 'en_AU', voiceURI: 'en.karen' },
+  { name: 'Samantha', lang: 'en-US', voiceURI: 'en.samantha' },
+];
+
+test('the voice list is English only, US first, each once', () =>
+{
+  equal(englishVoices(VOICES).map((voice) => voice.voiceURI), ['en.fred', 'en.samantha', 'en.daniel', 'en.karen']);
+});
+
+test('the chosen voice is used, and Samantha until one is chosen', () =>
+{
+  equal(chooseVoice(VOICES, 'en.daniel').name, 'Daniel');
+  equal(chooseVoice(VOICES, null).name, 'Samantha');
+});
+
+test('a chosen voice the iPad no longer has falls back instead of failing', () =>
+{
+  equal(chooseVoice(VOICES, 'en.gone').name, 'Samantha');
+  equal(chooseVoice(VOICES.filter((voice) => voice.name !== 'Samantha'), 'en.gone').name, 'Fred');
+  equal(chooseVoice([{ name: 'Thomas', lang: 'fr-FR', voiceURI: 'fr.thomas' }], null), null);
+});
+
+test('slower is slower', () =>
+{
+  ok(speechRate({ speed: 'slower' }) < speechRate({ speed: 'normal' }));
+  equal(speechRate({ speed: 'nonsense' }), SPEEDS.normal.rate);
+});
+
+test('settings come back as saved, and anything odd falls back to the defaults', () =>
+{
+  const store = new Map();
+  const storage = { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) };
+  equal(loadSettings(storage), defaultSettings());
+  saveSettings(storage, { voice: 'en.daniel', speed: 'slower' });
+  equal(loadSettings(storage), { voice: 'en.daniel', speed: 'slower' });
+  store.set('word_miner_settings', JSON.stringify({ voice: 42, speed: 'warp' }));
+  equal(loadSettings(storage), { voice: null, speed: 'normal' });
+  store.set('word_miner_settings', '{broken');
+  equal(loadSettings(storage), defaultSettings());
 });
 
 report();

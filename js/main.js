@@ -9,7 +9,8 @@
 import { SOUND_KEYS, RECORD_ONLY, SOUND_HINTS, WORLDS, playableWords, pickChoices } from './phonics.js';
 import * as progress from './progress.js';
 import { CRITTERS, critterById, openPack } from './critters.js';
-import { Sounds, say, wait } from './audio.js';
+import { Sounds, say, wait, configureVoice, deviceVoices } from './audio.js';
+import { SPEEDS, englishVoices, chooseVoice, speechRate, loadSettings, saveSettings } from './settings.js';
 import { loadRecordings, saveRecording, deleteRecording, startRecording } from './recorder.js';
 import { cardHtml, drawSprites } from './cards.js';
 import { grownUpQuestion } from './gate.js';
@@ -19,6 +20,7 @@ const overlay = document.getElementById('overlay');
 const sounds = new Sounds();
 
 let state = progress.load(localStorage);
+let settings = loadSettings(localStorage);
 let session = null;
 // Off only in preview mode (see the bottom of this file), whose made-up
 // progress must never overwrite his real progress.
@@ -50,6 +52,16 @@ const MAP_LETTERS = {
   lava: 'sh',
   sky: 'a_e',
 };
+
+function applySettings(next)
+{
+  settings = next;
+  configureVoice({ voiceURI: settings.voice, rate: speechRate(settings) });
+  if (saving)
+  {
+    saveSettings(localStorage, settings);
+  }
+}
 
 function commit(next)
 {
@@ -122,6 +134,7 @@ function renderStart()
 function renderHome()
 {
   clearIdle();
+  app.onchange = null;
   session = null;
   setSky('grass');
   const available = sounds.available();
@@ -730,6 +743,7 @@ function revealCard(critter, isNew, done)
       <button class="block-button green" data-action="close">⛏️ Keep mining!</button>
     </div>`;
   drawSprites(overlay, critterById);
+  tiltable(overlay.querySelector('.card.big'));
   if (critter.rarity === 'rare' || critter.rarity === 'legendary')
   {
     confetti();
@@ -753,6 +767,38 @@ function revealCard(critter, isNew, done)
       done();
     }
   };
+}
+
+// A big card follows his finger: it tilts toward it, and on a holofoil
+// card the foil's rainbow and sparkle slide with it, the way a real one
+// catches the light as it's turned. Let go and it settles back, and the
+// foil goes back to drifting on its own.
+function tiltable(card)
+{
+  if (!card)
+  {
+    return;
+  }
+  const move = (event) =>
+  {
+    const box = card.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+    const y = Math.min(1, Math.max(0, (event.clientY - box.top) / box.height));
+    card.classList.add('touching');
+    card.style.setProperty('--foil-x', `${Math.round(x * 100)}%`);
+    card.style.setProperty('--foil-y', `${Math.round(y * 100)}%`);
+    card.style.transform = `perspective(900px) rotateY(${((x - 0.5) * 24).toFixed(1)}deg) rotateX(${((0.5 - y) * 24).toFixed(1)}deg)`;
+  };
+  const settle = () =>
+  {
+    card.classList.remove('touching');
+    card.style.transform = '';
+  };
+  card.addEventListener('pointerdown', move);
+  card.addEventListener('pointermove', move);
+  card.addEventListener('pointerup', settle);
+  card.addEventListener('pointerleave', settle);
+  card.addEventListener('pointercancel', settle);
 }
 
 // --- the card binder ---------------------------------------------------------------
@@ -808,6 +854,7 @@ function showBigCard(critter)
     ${cardHtml(critter, { big: true, count: state.cards[critter.id] })}
     <button class="block-button" data-action="close">Close</button>`;
   drawSprites(overlay, critterById);
+  tiltable(overlay.querySelector('.card.big'));
   say(`${critter.name}. ${critter.move}!`);
   overlay.onclick = (event) =>
   {
@@ -853,6 +900,12 @@ function renderParent()
         ${SOUND_KEYS.map((key) => soundRow(key, available)).join('')}
       </div>
 
+      <h2 id="voice">Voice</h2>
+      <p>The voice that reads the instructions and words aloud. (The letter sounds above are recordings, so they
+      stay the same.) These are the voices on this iPad; more can be downloaded in the iPad's Settings, under
+      Accessibility, Spoken Content, Voices.</p>
+      ${voiceControls()}
+
       <h2>How he's doing</h2>
       <div class="stat-grid">
         <div class="stat">Words read right: <strong>${totalRight}</strong></div>
@@ -876,6 +929,27 @@ function renderParent()
       for the game. Fonts: Andika (SIL) and Press Start 2P (CodeMan38), both under the SIL Open Font License. Everything
       else - the critters, blocks and words - was made for this game.</p>
     </div>`;
+
+  app.onchange = (event) =>
+  {
+    if (event.target.dataset.setting === 'voice')
+    {
+      applySettings({ ...settings, voice: event.target.value });
+      say("Hi, miner! Let's read some words!");
+    }
+  };
+  // The voice list can arrive a moment after the page loads.
+  if ('speechSynthesis' in window && englishVoices(deviceVoices()).length === 0)
+  {
+    window.speechSynthesis.onvoiceschanged = () =>
+    {
+      window.speechSynthesis.onvoiceschanged = null;
+      if (app.querySelector('.parent'))
+      {
+        renderParent();
+      }
+    };
+  }
 
   app.onclick = async (event) =>
   {
@@ -904,6 +978,16 @@ function renderParent()
       sounds.clearRecording(key);
       renderParent();
     }
+    else if (action === 'test-voice')
+    {
+      say("Hi, miner! Let's read some words!");
+    }
+    else if (action === 'speed')
+    {
+      applySettings({ ...settings, speed: target.dataset.speed });
+      renderParent();
+      say("Let's read some words!");
+    }
     else if (action === 'reset')
     {
       if (window.confirm('Reset all progress - gems, words and cards? This cannot be undone.'))
@@ -913,6 +997,26 @@ function renderParent()
       }
     }
   };
+}
+
+function voiceControls()
+{
+  const voices = englishVoices(deviceVoices());
+  if (voices.length === 0)
+  {
+    return '<p><em>This device has no English voices to choose from.</em></p>';
+  }
+  const current = chooseVoice(deviceVoices(), settings.voice);
+  return `
+    <div class="voice-controls">
+      <select class="voice-select" data-setting="voice" aria-label="Voice">
+        ${voices.map((voice) => `<option value="${voice.voiceURI}" ${current && voice.voiceURI === current.voiceURI ? 'selected' : ''}>${voice.name} (${voice.lang})</option>`).join('')}
+      </select>
+      <button class="small-button" data-action="test-voice">▶ Test</button>
+    </div>
+    <p>Speed:
+      ${Object.entries(SPEEDS).map(([key, speed]) => `<button class="small-button ${settings.speed === key ? 'chosen' : ''}" data-action="speed" data-speed="${key}">${speed.label}</button>`).join(' ')}
+    </p>`;
 }
 
 function soundRow(key, available)
@@ -998,8 +1102,10 @@ if ('speechSynthesis' in window)
   // The voice list loads late on some devices; asking early warms it up.
   window.speechSynthesis.getVoices();
 }
+configureVoice({ voiceURI: settings.voice, rate: speechRate(settings) });
 // Checking a screen's layout on a device or simulator, without playing
-// through to it: ?preview=home, play, choose, collection, pack, gate or parent
+// through to it: ?preview=home, play, choose, collection, pack, gate, card
+// (&id= a critter) or parent
 // opens straight on that screen with made-up progress that is never saved,
 // and shows any error on screen. Nothing in the game links here.
 const preview = new URLSearchParams(window.location.search).get('preview');
@@ -1051,11 +1157,22 @@ if (preview)
   else if (preview === 'parent')
   {
     renderParent();
+    // ?preview=parent&section=voice jumps to that section.
+    const section = new URLSearchParams(window.location.search).get('section');
+    if (section)
+    {
+      setTimeout(() => document.getElementById(section)?.scrollIntoView(), 300);
+    }
   }
   else if (preview === 'gate')
   {
     renderHome();
     showGrownUpGate();
+  }
+  else if (preview === 'card')
+  {
+    renderCollection();
+    showBigCard(critterById(new URLSearchParams(window.location.search).get('id') ?? 'glacior'));
   }
   else
   {

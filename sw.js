@@ -7,7 +7,7 @@
 // Bump VERSION when anything changes, so iPads drop the old copy.
 // tools/check_assets.py checks ASSETS against the files on disk.
 
-const VERSION = 'word-miner-v2';
+const VERSION = 'word-miner-v3';
 
 const ASSETS = [
   './',
@@ -22,6 +22,7 @@ const ASSETS = [
   'js/audio.js',
   'js/trim.js',
   'js/gate.js',
+  'js/settings.js',
   'js/recorder.js',
   'fonts/andika-regular.woff2',
   'fonts/andika-bold.woff2',

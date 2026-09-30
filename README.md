@@ -36,6 +36,10 @@ different words in the one before it are read right.
 
 Finishing a world gives a special pack that's always rare or better.
 
+Rare cards are holofoil - a rainbow foil picture window with sparkle - and
+legendary ones are foil all over with a gold edge. Held up big, a card
+tilts under his finger and the foil shimmers with it.
+
 ## Grown-ups' corner
 
 Tap the gear on the map and answer the times-table question it asks (a quick
@@ -44,6 +48,10 @@ check that keeps him out). It has:
 - **Letter sounds.** The bundled recordings have no "b", so words with a b
   stay out of the game until you record one here. Any other sound can be
   re-recorded in your own voice too; the game trims the silence itself.
+- **Voice.** Pick any English voice on the iPad for the spoken instructions
+  and words, and a Slower or Normal speed. (The letter sounds are recordings,
+  so they don't change.) More voices can be downloaded in the iPad's Settings,
+  under Accessibility, Spoken Content, Voices.
 - **Progress,** including the words he finds hardest.
 - **Reset,** and the credits.
 
@@ -67,7 +75,8 @@ python3 -m http.server 8000
 
 - `sh tools/test.sh` runs the tests (with the JavaScript engine built into
   macOS - nothing to install) and checks the offline file list.
-- `?preview=home`, `play`, `choose`, `collection`, `pack`, `gate` or `parent` opens
+- `?preview=home`, `play`, `choose`, `collection`, `pack`, `gate`, `card`
+  (`&id=` a critter) or `parent` (`&section=voice`) opens
   straight on a screen with made-up progress that is never saved, for checking
   a layout on a device.
 - `python3 tools/prepare_sounds.py` re-trims `sounds/source/` into `sounds/`.
@@ -80,6 +89,7 @@ python3 -m http.server 8000
 | `js/progress.js` | Gems, streaks, packs, unlocking worlds, choosing the next word |
 | `js/critters.js` | The 32 critter cards, pack odds, and their pixel art |
 | `js/audio.js` | Letter sounds, game noises and the spoken instructions |
+| `js/settings.js` | The grown-ups' voice and speed settings |
 | `js/recorder.js` | Parent recordings, kept on the iPad |
 | `js/main.js` | Every screen |
 

@@ -575,22 +575,31 @@ button
 
 .card.big
 {
-  width: min(70vmin, 360px);
+  width: min(62vmin, 460px);
   border-width: 8px;
 }
 
 .card-top
 {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
+  column-gap: 0.4em;
   font-weight: 700;
   font-size: 0.95em;
 }
 
+/* The whole name, always - it's something to read. A long one pushes the
+   HP down a line rather than being cut short or running into it. */
+.card-hp
+{
+  margin-left: auto;
+}
+
 .card.big .card-top
 {
-  font-size: 1.6em;
+  font-size: 1.4em;
 }
 
 .card-hp
@@ -659,27 +668,79 @@ button
   padding: 0 6px;
 }
 
-.card.rare,
-.card.legendary
+/* Holofoil, like the shiny cards in a real pack. A rare card's picture
+   window is foil - a rainbow that drifts across it, with a scatter of
+   sparkle on top. A legendary card is foil all over, with a gold edge.
+   On the big card, dragging a finger tilts it and slides the foil with it
+   (--foil-x / --foil-y, see tiltable in main.js); otherwise the foil drifts
+   on its own. The critter itself is drawn above the foil so it stays
+   crisp. */
+
+.card.rare:not(.unknown),
+.card.legendary:not(.unknown)
 {
   border-color: #fff4b0;
+  transition: transform 0.15s ease-out;
+  touch-action: none;
 }
 
-.card.rare:not(.unknown)::before,
-.card.legendary:not(.unknown)::before
+.card.rare:not(.unknown) .card-art,
+.card.legendary:not(.unknown) .card-art
+{
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(115deg,
+      #ff7ab8 0%, #ffd56b 14%, #8dff9a 28%, #6be3ff 42%, #9f8bff 56%, #ff7ab8 70%, #ffd56b 84%, #8dff9a 100%);
+  background-size: 300% 300%;
+  background-position: var(--foil-x, 0%) var(--foil-y, 50%);
+  animation: foil-drift 5s ease-in-out infinite alternate;
+}
+
+.card.rare:not(.unknown) .card-art::before,
+.card.legendary:not(.unknown) .card-art::before,
+.card.legendary:not(.unknown)::after
 {
   content: '';
   position: absolute;
-  inset: -50%;
-  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.55) 50%, transparent 60%);
-  animation: shine 2.6s linear infinite;
+  inset: 0;
   pointer-events: none;
+  /* Two sizes of glint, and a soft white sheen that follows the light. */
+  background:
+    radial-gradient(circle at var(--foil-x, 30%) var(--foil-y, 30%), rgba(255, 255, 255, 0.75), transparent 45%),
+    radial-gradient(rgba(255, 255, 255, 0.95) 1px, transparent 1.6px),
+    radial-gradient(rgba(255, 255, 255, 0.7) 0.8px, transparent 1.3px);
+  background-size: 100% 100%, 18px 18px, 11px 11px;
+  background-position: center, 0 0, 5px 7px;
+  mix-blend-mode: overlay;
+  animation: glint 2.4s ease-in-out infinite;
 }
 
-.card.legendary
+.card-art canvas
+{
+  position: relative;
+  z-index: 1;
+}
+
+.card.legendary:not(.unknown)
 {
   border-color: #ffd23f;
   box-shadow: 0 0 18px #ffd23f, 0 6px 0 rgba(0, 0, 0, 0.4);
+  background:
+    linear-gradient(135deg,
+      rgba(255, 122, 184, 0.55) 0%, rgba(255, 213, 107, 0.55) 20%, rgba(141, 255, 154, 0.55) 40%,
+      rgba(107, 227, 255, 0.55) 60%, rgba(159, 139, 255, 0.55) 80%, rgba(255, 122, 184, 0.55) 100%),
+    linear-gradient(160deg, var(--type) 0%, var(--type-dark) 100%);
+  background-size: 300% 300%, 100% 100%;
+  background-position: var(--foil-x, 0%) var(--foil-y, 50%), center;
+  animation: foil-drift 6s ease-in-out infinite alternate;
+}
+
+/* A finger on the card moves the foil itself - no drifting under it. */
+.card.touching,
+.card.touching .card-art
+{
+  animation: none;
 }
 
 .card.unknown
@@ -821,6 +882,33 @@ button
   z-index: 20;
   pointer-events: none;
   animation: fall 1.8s linear forwards;
+}
+
+/* --- voice settings -------------------------------------------------------------- */
+
+.voice-controls
+{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.voice-select
+{
+  font: inherit;
+  font-size: 17px;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  max-width: 100%;
+}
+
+.small-button.chosen
+{
+  background: var(--good);
 }
 
 /* --- the grown-ups' check ------------------------------------------------------ */
@@ -1065,10 +1153,15 @@ button
   from { transform: perspective(800px) rotateY(90deg) scale(0.7); }
 }
 
-@keyframes shine
+@keyframes foil-drift
 {
-  from { transform: translateX(-60%); }
-  to { transform: translateX(60%); }
+  from { background-position: 0% 30%; }
+  to { background-position: 100% 70%; }
+}
+
+@keyframes glint
+{
+  50% { opacity: 0.45; }
 }
 
 @keyframes fall

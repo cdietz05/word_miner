@@ -8,6 +8,7 @@
 // from a tap, so unlock() must be called from the first one.
 
 import { soundSpan } from './trim.js';
+import { chooseVoice } from './settings.js';
 
 export class Sounds
 {
@@ -248,10 +249,26 @@ export class Sounds
 
 // --- the voice -----------------------------------------------------------------
 
+// Which voice and speed the grown-ups picked (see settings.js). Set with
+// configureVoice; say() reads it every time, so a change applies at once.
+let voiceConfig = { voiceURI: null, rate: 0.9 };
+
+export function configureVoice({ voiceURI, rate })
+{
+  voiceConfig = { voiceURI, rate };
+}
+
+// Every voice the device has, as the browser lists them. The list can be
+// empty for a moment after the page loads, and fills in shortly after.
+export function deviceVoices()
+{
+  return 'speechSynthesis' in window ? window.speechSynthesis.getVoices() : [];
+}
+
 // Reads [text] aloud; resolves when it's done. Safari sometimes never says
 // it has finished, so it gives up waiting after a while rather than
 // stalling the game.
-export function say(text, { rate = 0.9 } = {})
+export function say(text)
 {
   if (!('speechSynthesis' in window))
   {
@@ -261,14 +278,15 @@ export function say(text, { rate = 0.9 } = {})
   return new Promise((resolve) =>
   {
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = rate;
+    utterance.rate = voiceConfig.rate;
     utterance.pitch = 1.1;
-    const voice = pickVoice();
+    const voice = chooseVoice(deviceVoices(), voiceConfig.voiceURI);
     if (voice)
     {
       utterance.voice = voice;
+      utterance.lang = voice.lang;
     }
-    const giveUp = setTimeout(resolve, 1500 + text.length * 90);
+    const giveUp = setTimeout(resolve, 1500 + (text.length * 90) / voiceConfig.rate);
     utterance.onend = () =>
     {
       clearTimeout(giveUp);
@@ -281,24 +299,6 @@ export function say(text, { rate = 0.9 } = {})
     };
     window.speechSynthesis.speak(utterance);
   });
-}
-
-let chosenVoice = null;
-
-// A friendly US English voice where there is one - Samantha on the iPad.
-function pickVoice()
-{
-  if (chosenVoice)
-  {
-    return chosenVoice;
-  }
-  const voices = window.speechSynthesis.getVoices();
-  const english = voices.filter((voice) => voice.lang && voice.lang.startsWith('en'));
-  chosenVoice = english.find((voice) => voice.name === 'Samantha')
-    ?? english.find((voice) => voice.lang === 'en-US')
-    ?? english[0]
-    ?? null;
-  return chosenVoice;
 }
 
 export function wait(ms)
