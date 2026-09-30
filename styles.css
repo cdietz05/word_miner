@@ -823,6 +823,64 @@ button
   animation: fall 1.8s linear forwards;
 }
 
+/* --- the grown-ups' check ------------------------------------------------------ */
+
+.gate
+{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.gate.shake-once
+{
+  animation: shake 0.4s;
+}
+
+.gate-question
+{
+  font-size: clamp(32px, 6vmin, 56px);
+  font-weight: 700;
+}
+
+.gate-answer
+{
+  display: inline-block;
+  min-width: 2.2em;
+  border-bottom: 4px solid var(--gold);
+  text-align: center;
+}
+
+.keypad
+{
+  display: grid;
+  grid-template-columns: repeat(3, clamp(64px, 11vmin, 96px));
+  gap: 10px;
+}
+
+.key
+{
+  height: clamp(64px, 11vmin, 96px);
+  font-size: clamp(26px, 5vmin, 40px);
+  font-weight: 700;
+  background: var(--paper);
+  color: var(--ink);
+  border: 4px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.35);
+}
+
+.key:active
+{
+  transform: translateY(3px);
+}
+
+.key.go
+{
+  background: var(--good);
+}
+
 /* --- parent corner --------------------------------------------------------- */
 
 .parent
