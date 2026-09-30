@@ -11,10 +11,15 @@ evolving from a cute baby into a fierce final form.
 1. The word appears as a row of letter stones, one per sound (`c` `a` `t`,
    `sh` `i` `p`, `c` `a` `k` `e`).
 2. He taps each letter, left to right, and hears its sound.
-3. He taps Blend, and the sounds play once slowly, then run together.
-4. He picks the picture that matches from three. After two misses the right
-   picture points itself out. Every right answer earns an orb - the point is
-   to keep him trying.
+3. He taps Blend, and the sounds play again in a row, slowly, each letter
+   lighting up as it plays. Then he's asked to say them fast himself -
+   blending is the skill he's learning, so the game never does it for him.
+   (The letter recordings are never run together: stitched-up sounds can't
+   flow like a real word.)
+4. He picks the picture that matches from three, and the voice says the word
+   the way it's really spoken. After two misses the right picture points
+   itself out. Every right answer earns an orb - the point is to keep him
+   trying.
 
 Every instruction is spoken aloud, since he's learning to read. The letters
 are set in Andika, a typeface designed for early readers.
