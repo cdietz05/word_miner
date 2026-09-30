@@ -3,6 +3,7 @@ import { SOUND_KEYS, RECORD_ONLY, SOUND_HINTS, WORLDS, WORLD_GOAL, parseWord, is
 import * as progress from '../js/progress.js';
 import { CRITTERS, TYPES, RARITIES, openPack, critterSprite, seededRandom } from '../js/critters.js';
 import { soundSpan } from '../js/trim.js';
+import { grownUpQuestion } from '../js/gate.js';
 
 const everySound = new Set(SOUND_KEYS);
 const shipped = new Set(SOUND_KEYS.filter((key) => !RECORD_ONLY.includes(key)));
@@ -345,6 +346,20 @@ test('a click far from the sound is left out', () =>
 test('a silent recording has no sound in it', () =>
 {
   equal(soundSpan(recording(1, []), 8000), null);
+});
+
+// --- the grown-ups' check ------------------------------------------------------------
+
+test('the grown-ups question is a times table from 3 to 9, with its answer', () =>
+{
+  const rng = random();
+  for (let i = 0; i < 300; i++)
+  {
+    const { text, answer } = grownUpQuestion(rng);
+    const [a, b] = text.split(' × ').map(Number);
+    ok(a >= 3 && a <= 9 && b >= 3 && b <= 9, text);
+    equal(answer, a * b, text);
+  }
 });
 
 report();

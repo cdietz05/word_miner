@@ -38,7 +38,8 @@ Finishing a world gives a special pack that's always rare or better.
 
 ## Grown-ups' corner
 
-Press and hold the gear on the map for a second and a half. It has:
+Tap the gear on the map and answer the times-table question it asks (a quick
+check that keeps him out). It has:
 
 - **Letter sounds.** The bundled recordings have no "b", so words with a b
   stay out of the game until you record one here. Any other sound can be
@@ -66,7 +67,7 @@ python3 -m http.server 8000
 
 - `sh tools/test.sh` runs the tests (with the JavaScript engine built into
   macOS - nothing to install) and checks the offline file list.
-- `?preview=home`, `play`, `choose`, `collection`, `pack` or `parent` opens
+- `?preview=home`, `play`, `choose`, `collection`, `pack`, `gate` or `parent` opens
   straight on a screen with made-up progress that is never saved, for checking
   a layout on a device.
 - `python3 tools/prepare_sounds.py` re-trims `sounds/source/` into `sounds/`.

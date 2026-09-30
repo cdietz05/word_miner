@@ -12,6 +12,7 @@ import { CRITTERS, critterById, openPack } from './critters.js';
 import { Sounds, say, wait } from './audio.js';
 import { loadRecordings, saveRecording, deleteRecording, startRecording } from './recorder.js';
 import { cardHtml, drawSprites } from './cards.js';
+import { grownUpQuestion } from './gate.js';
 
 const app = document.getElementById('app');
 const overlay = document.getElementById('overlay');
@@ -133,7 +134,7 @@ function renderHome()
       <span class="screen-title">WORD MINER</span>
       <span class="spacer"></span>
       <div class="counter"><span class="icon">💎</span>${state.gems}</div>
-      <button class="icon-button" data-hold="parent" aria-label="Grown-ups: press and hold">⚙️</button>
+      <button class="icon-button" data-action="grown-ups" aria-label="Grown-ups">⚙️</button>
     </div>
     <div class="home-body">
       <div class="home-actions">
@@ -173,8 +174,11 @@ function renderHome()
       await showPacks();
       renderHome();
     }
+    else if (action === 'grown-ups')
+    {
+      showGrownUpGate();
+    }
   };
-  wireParentHold();
 }
 
 function worldTile(world, isOpen, available)
@@ -193,32 +197,70 @@ function worldTile(world, isOpen, available)
     </button>`;
 }
 
-// The grown-ups' corner opens on a press-and-hold of the gear, so a tap
-// from a six-year-old doesn't land there.
-function wireParentHold()
+// The grown-ups' corner is behind a times-table question (see gate.js):
+// the answer typed on a number pad, a wrong one swapped for a new question.
+function showGrownUpGate()
 {
-  const gear = app.querySelector('[data-hold="parent"]');
-  if (!gear)
+  let question = grownUpQuestion(Math.random);
+  let typed = '';
+  overlay.hidden = false;
+  const draw = (wrong = false) =>
   {
-    return;
-  }
-  let timer = null;
-  const cancel = () =>
-  {
-    clearTimeout(timer);
-    timer = null;
+    overlay.innerHTML = `
+      <div class="gate ${wrong ? 'shake-once' : ''}">
+        <div class="overlay-text">GROWN-UPS ONLY</div>
+        <div class="gate-question">${question.text} = <span class="gate-answer">${typed || '?'}</span></div>
+        <div class="keypad">
+          ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => `<button class="key" data-key="${digit}">${digit}</button>`).join('')}
+          <button class="key" data-key="back" aria-label="Delete">⌫</button>
+          <button class="key" data-key="0">0</button>
+          <button class="key go" data-key="go" aria-label="Enter">✓</button>
+        </div>
+        <button class="block-button" data-key="cancel">Back to the game</button>
+      </div>`;
   };
-  gear.addEventListener('pointerdown', () =>
+  draw();
+  overlay.onclick = (event) =>
   {
-    timer = setTimeout(() =>
+    const key = event.target.closest('[data-key]')?.dataset.key;
+    if (!key)
     {
-      timer = null;
-      renderParent();
-    }, 1500);
-  });
-  gear.addEventListener('pointerup', cancel);
-  gear.addEventListener('pointerleave', cancel);
-  gear.addEventListener('pointercancel', cancel);
+      return;
+    }
+    if (key === 'cancel')
+    {
+      overlay.onclick = null;
+      overlay.hidden = true;
+      overlay.innerHTML = '';
+      return;
+    }
+    if (key === 'back')
+    {
+      typed = typed.slice(0, -1);
+      draw();
+      return;
+    }
+    if (key === 'go')
+    {
+      if (Number(typed) === question.answer)
+      {
+        overlay.onclick = null;
+        overlay.hidden = true;
+        overlay.innerHTML = '';
+        renderParent();
+        return;
+      }
+      question = grownUpQuestion(Math.random);
+      typed = '';
+      draw(true);
+      return;
+    }
+    if (typed.length < 3)
+    {
+      typed += key;
+      draw();
+    }
+  };
 }
 
 // --- play --------------------------------------------------------------------
@@ -957,7 +999,7 @@ if ('speechSynthesis' in window)
   window.speechSynthesis.getVoices();
 }
 // Checking a screen's layout on a device or simulator, without playing
-// through to it: ?preview=home, play, choose, collection, pack or parent
+// through to it: ?preview=home, play, choose, collection, pack, gate or parent
 // opens straight on that screen with made-up progress that is never saved,
 // and shows any error on screen. Nothing in the game links here.
 const preview = new URLSearchParams(window.location.search).get('preview');
@@ -1009,6 +1051,11 @@ if (preview)
   else if (preview === 'parent')
   {
     renderParent();
+  }
+  else if (preview === 'gate')
+  {
+    renderHome();
+    showGrownUpGate();
   }
   else
   {
